@@ -81,6 +81,16 @@ to believe nginx's `X-Forwarded-For`.
 docker compose -f compose.prod.yaml -f deploy/compose.nginx.yaml --env-file .env.prod up -d --build
 ```
 
+To type plain `docker compose …` on this server without the `-f` options (and
+never start the development `compose.yaml` by mistake), make `.env` point to
+`.env.prod` and name the files there:
+
+```sh
+echo 'COMPOSE_FILE=compose.prod.yaml:deploy/compose.nginx.yaml' >> .env.prod
+ln -s .env.prod .env
+docker compose up -d --build      # now the same as the long command above
+```
+
 Ports 8080 or 3000 taken on the host? Set `API_PORT` / `WEB_PORT` in `.env.prod`
 and change the two `upstream` lines in the nginx file to match.
 
