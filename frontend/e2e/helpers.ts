@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 export async function newPlayer(page: Page, boosters = 0, collection = 'ww2-warships') {
 	const name = `pw${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 	const res = await page.request.post('/api/auth/register', {
-		data: { username: name, email: `${name}@example.com`, password: '123456789' }
+		data: { username: name, email: `${name}@example.com`, password: '123456789', terms: 1 }
 	});
 	expect(res.status()).toBe(201);
 	for (let i = 0; i < boosters; i++) {
@@ -33,23 +33,28 @@ export async function visit(page: Page, path: string) {
 	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
 }
 
-/** Inserts copies straight into the player's binder (dev database, see .env) */
-export async function give(page: Page, card: string, count: number, foil: string | null = null) {
+/** Runs SQL on the dev database (see .env), for states the UI cannot reach quickly */
+export async function sql(query: string, params: unknown[] = []) {
 	const pg = await import('pg');
-	const me = await (await page.request.get('/api/me')).json();
 	const client = new pg.default.Client({
 		connectionString:
 			process.env.DATABASE_URL ?? 'postgres://anycardz:anycardz@127.0.0.1:5433/anycardz'
 	});
 	await client.connect();
 	try {
-		await client.query(
-			'INSERT INTO owned_cards (user_id, card, foil) SELECT $1, $2, $3 FROM generate_series(1, $4)',
-			[me.id, card, foil, count]
-		);
+		return await client.query(query, params);
 	} finally {
 		await client.end();
 	}
+}
+
+/** Inserts copies straight into the player's binder */
+export async function give(page: Page, card: string, count: number, foil: string | null = null) {
+	const me = await (await page.request.get('/api/me')).json();
+	await sql(
+		'INSERT INTO owned_cards (user_id, card, foil) SELECT $1, $2, $3 FROM generate_series(1, $4)',
+		[me.id, card, foil, count]
+	);
 }
 
 /** First card of a rarity in a collection, from the real catalog */
