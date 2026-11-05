@@ -13,7 +13,7 @@ test('achievements: earned from play, listed with progress', async ({ page }) =>
 	await expect(first).toHaveClass(/done/);
 	await expect(first).toContainText(/Earned/);
 	await expect(page.locator('.ach', { hasText: 'Pack rat' })).toContainText('1 / 50');
-	await expect(page.locator('.summary')).toContainText(/^[1-9]\d* of 17 earned/);
+	await expect(page.locator('.summary')).toContainText(/^[1-9]\d* of 18 earned/);
 });
 
 test('leaderboards: boards, periods, and the player highlighted', async ({ page }) => {
