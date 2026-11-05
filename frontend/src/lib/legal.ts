@@ -160,7 +160,7 @@ const fr: typeof en = {
 				title: 'Les pièces et les cartes n’ont aucune valeur monétaire',
 				body: [
 					'Les pièces, boosters et cartes sont des objets de jeu. Ce n’est pas de l’argent, ils ne s’échangent pas contre de l’argent et ne vous appartiennent pas : vous avez le droit de les utiliser dans le jeu, rien de plus.',
-					'Les packs de pièces sont gratuits pour l’instant : aucun paiement n’est demandé. Si des packs payants arrivent un jour, ils seront annoncés et ces conditions changeront d’abord.',
+					'Les lots de pièces sont gratuits pour l’instant : aucun paiement n’est demandé. Si des lots payants arrivent un jour, ils seront annoncés et ces conditions changeront d’abord.',
 					'Vendre, acheter ou échanger des comptes, des pièces ou des cartes contre de l’argent réel ou quoi que ce soit hors du jeu est interdit.'
 				]
 			},
@@ -187,10 +187,10 @@ const fr: typeof en = {
 				]
 			},
 			{
-				title: 'Tribune, profils et messages',
+				title: 'Discussion, profils et messages',
 				body: [
 					'Vous êtes responsable de ce que vous écrivez. Pas de harcèlement, de haine, de menaces, d’informations personnelles sur d’autres, de spam, de publicité ni de contenu illégal.',
-					'Vous pouvez bloquer des joueurs : ils ne peuvent plus échanger avec vous, vous ajouter en ami, ni apparaître dans votre tribune.',
+					'Vous pouvez bloquer des joueurs : ils ne peuvent plus échanger avec vous, vous ajouter en ami, ni apparaître dans votre discussion.',
 					'Nous pouvons retirer les messages, bios et avatars qui enfreignent ces règles.'
 				]
 			},
@@ -217,8 +217,8 @@ const fr: typeof en = {
 				title: 'Ce que nous conservons',
 				body: [
 					'Votre compte : pseudo, adresse e-mail, mot de passe (sous forme d’empreinte à sens unique, illisible pour nous), pièces, et la date d’acceptation des conditions.',
-					'Votre jeu : cartes et date d’obtention, boosters non ouverts, série quotidienne, packs de pièces réclamés, échanges, résultats de la forge quand ils modifient vos cartes.',
-					'Ce que vous partagez : bio, avatar, messages de la tribune, amis et joueurs bloqués.',
+					'Votre jeu : cartes et date d’obtention, boosters non ouverts, série quotidienne, succès, lots de pièces obtenus, échanges, résultats de la forge quand ils modifient vos cartes.',
+					'Ce que vous partagez : bio, avatar, messages de la discussion, amis et joueurs bloqués.',
 					'Vos sessions : pour chaque appareil connecté, le nom de son navigateur (user agent), la date de connexion et de dernière utilisation.',
 					'Les notifications qui vous sont envoyées, et si vous les avez lues.'
 				]
@@ -233,7 +233,7 @@ const fr: typeof en = {
 			{
 				title: 'Qui voit quoi',
 				body: [
-					'Tous les joueurs voient votre pseudo, votre avatar, votre bio, les cartes que vous avez collectionnées et vos messages dans la tribune. Votre e-mail, vos pièces, vos sessions et vos échanges sont privés (un échange est visible des deux joueurs concernés).',
+					'Tous les joueurs voient votre pseudo, votre avatar, votre bio, les cartes que vous avez collectionnées et vos messages dans la discussion. Votre e-mail, vos pièces, vos sessions et vos échanges sont privés (un échange est visible des deux joueurs concernés).',
 					'Vos données ne sont ni vendues ni cédées à quiconque. Elles sont stockées sur les serveurs qui font fonctionner le site.',
 					'Des comptages sans nom (requêtes par page, boosters ouverts, pièces dépensées) sont conservés pour surveiller la santé du site ; ils ne contiennent aucune donnée personnelle.'
 				]
