@@ -15,7 +15,14 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
+    // ANYCARDZ_LOG_FORMAT=json: one JSON object a line, for log collectors (Loki).
+    // Colors only on a terminal: `docker logs` and collectors get plain text.
+    let logs = tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env());
+    if std::env::var("ANYCARDZ_LOG_FORMAT").is_ok_and(|v| v == "json") {
+        logs.json().with_current_span(true).with_span_list(false).init();
+    } else {
+        logs.with_ansi(std::io::IsTerminal::is_terminal(&std::io::stdout())).init();
+    }
 
     let config = Config::from_env()?;
     let catalog = Catalog::load(&config.data_dir, config.dev_collections)?;
