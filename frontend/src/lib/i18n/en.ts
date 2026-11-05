@@ -105,9 +105,8 @@ export default {
 	'streak.scratch_hint': 'Scratch the ticket to claim.',
 	'streak.reveal': 'Reveal without scratching',
 	'streak.claimed': 'Claimed',
-	'streak.next': 'Next ticket in {time} · tomorrow is worth +{n}',
+	'streak.next': 'Next ticket in {time}',
 	'streak.claimed_toast': '+{n} coins · day {day} streak kept',
-	'streak.ladder': 'Reward ladder',
 
 	'open.pile_count_one': '1 in your pile',
 	'open.pile_count_other': '{n} in your pile',
@@ -701,6 +700,10 @@ export default {
 	'mission.scratch': 'Scratch {n} tickets',
 	'errors.no_ticket': 'No ticket right now: one comes back every 20 minutes.',
 	'forge.boost': 'Boost ×2 until {time}',
-	'lobby.tickets_one': '+ 1 scratch ticket',
-	'lobby.tickets_other': '+ {n} scratch tickets'
+	'tickets.held_one': '1/{max} scratch ticket',
+	'tickets.held_other': '{n}/{max} scratch tickets',
+	'tickets.next': 'next in {time}',
+	'tickets.next_alone': 'Next scratch ticket in {time}',
+	'tickets.full': 'full',
+	'lobby.scratch_now': 'Scratch a ticket'
 } as const;

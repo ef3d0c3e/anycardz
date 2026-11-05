@@ -16,6 +16,7 @@
 	import Pack from '#lib/components/Pack.svelte';
 	import { getLive } from '#lib/live.svelte.ts';
 	import ScratchCard from '#lib/components/ScratchCard.svelte';
+	import TicketsLine from '#lib/components/TicketsLine.svelte';
 	import { brag } from '#lib/brag.ts';
 	import { playPack, ReelRun, type Mode } from '#lib/opening/reels.ts';
 
@@ -445,6 +446,7 @@
 			<div class="empty">
 				<h2>{i18n.t('open.empty_title')}</h2>
 				<p>{i18n.t('open.empty_hint')}</p>
+				<TicketsLine href={null} />
 				<a class="btn" href="/">{i18n.t('open.go_lobby')}</a>
 			</div>
 		{:else}

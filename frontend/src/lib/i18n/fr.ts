@@ -106,9 +106,8 @@ const fr: Partial<Record<Key, string>> = {
 	'streak.scratch_hint': 'Gratte le ticket pour récupérer tes pièces.',
 	'streak.reveal': 'Révéler sans gratter',
 	'streak.claimed': 'Récupéré',
-	'streak.next': 'Prochain ticket dans {time} · demain : +{n}',
+	'streak.next': 'Prochain ticket dans {time}',
 	'streak.claimed_toast': '+{n} pièces · série maintenue, jour {day}',
-	'streak.ladder': 'Paliers de récompenses',
 
 	'open.pile_count_one': '1 dans ta pile',
 	'open.pile_count_other': '{n} dans ta pile',
@@ -708,7 +707,11 @@ const fr: Partial<Record<Key, string>> = {
 	'mission.scratch': 'Gratte {n} tickets',
 	'errors.no_ticket': 'Plus de ticket pour l’instant : il en revient un toutes les 20 minutes.',
 	'forge.boost': 'Bonus ×2 jusqu’à {time}',
-	'lobby.tickets_one': '+ 1 ticket à gratter',
-	'lobby.tickets_other': '+ {n} tickets à gratter'
+	'tickets.held_one': '1/{max} ticket à gratter',
+	'tickets.held_other': '{n}/{max} tickets à gratter',
+	'tickets.next': 'prochain dans {time}',
+	'tickets.next_alone': 'Prochain ticket à gratter dans {time}',
+	'tickets.full': 'complet',
+	'lobby.scratch_now': 'Gratter un ticket'
 };
 export default fr;

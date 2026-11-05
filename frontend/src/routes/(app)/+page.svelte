@@ -10,6 +10,7 @@
 	import HoldButton from '#lib/components/HoldButton.svelte';
 	import ScratchTicket from '#lib/components/ScratchTicket.svelte';
 	import Missions from '#lib/components/Missions.svelte';
+	import TicketsLine from '#lib/components/TicketsLine.svelte';
 	import { getTopup } from '#lib/topup.svelte.ts';
 	import { ApiError } from '#lib/api.ts';
 	import CollectionPicker from '#lib/components/CollectionPicker.svelte';
@@ -177,6 +178,13 @@
 						{#if session.pile.length > MAX_STACK}
 							<span class="more">+{session.pile.length - MAX_STACK}</span>
 						{/if}
+						{#if session.tickets?.count}
+							<span class="ticket-stub" aria-hidden="true">🎟 ×{session.tickets.count}</span>
+						{/if}
+					</a>
+				{:else if session.tickets?.count}
+					<a class="pile-empty with-tickets" href="/open" aria-label={i18n.t('lobby.scratch_now')}>
+						<span class="ticket-stub alone" aria-hidden="true">🎟 ×{session.tickets.count}</span>
 					</a>
 				{:else}
 					<div class="pile-empty">{i18n.t('lobby.empty_pile')}</div>
@@ -189,12 +197,10 @@
 							: i18n.t('lobby.no_packs')}
 					</h2>
 					<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
-					{#if session.tickets?.count}
-						<a class="tickets" href="/open"
-							>{i18n.t('lobby.tickets', { n: session.tickets.count })}</a
-						>
-					{/if}
-					{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
+					<TicketsLine />
+					{#if session.pile.length || session.tickets?.count}<a class="btn" href="/open"
+							>{i18n.t(session.pile.length ? 'lobby.open_next' : 'lobby.scratch_now')}</a
+						>{/if}
 				</div>
 			</section>
 			<Missions />
@@ -229,7 +235,7 @@
 				</div>
 				{#if session.streak.claimed_today}
 					<p class="next">
-						{i18n.t('streak.next', { time: countdown, n: session.streak.next_reward })}
+						{i18n.t('streak.next', { time: countdown })}
 					</p>
 				{:else}
 					<p class="next">
@@ -237,15 +243,6 @@
 						<button type="button" class="linkish" onclick={claim}>{i18n.t('streak.reveal')}</button>
 					</p>
 				{/if}
-				<ol class="ladder" aria-label={i18n.t('streak.ladder')}>
-					{#each session.streak.rewards as v, i}
-						{@const d = i + 1}
-						{@const now = Math.min(session.streak.day, 5)}
-						<li class:past={d < now} class:now={d === now}>
-							<span>{i18n.t('streak.day', { n: d })}{d === 5 ? '+' : ''}</span><b>{i18n.num(v)}</b>
-						</li>
-					{/each}
-				</ol>
 			</section>
 
 			<section class="panel free" aria-labelledby="free-title">
@@ -597,39 +594,6 @@
 		border-radius: 8px;
 		animation: stamp 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
 	}
-	.ladder {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(5, 1fr);
-		gap: 6px;
-	}
-	.ladder li {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2px;
-		padding: 7px 2px;
-		border-radius: 10px;
-		background: var(--surface-2);
-		font-size: 11px;
-		color: var(--muted);
-		position: relative;
-		text-align: center;
-	}
-	.ladder li b {
-		font: 700 13px var(--mono);
-		color: var(--ink);
-	}
-	.ladder li.past {
-		opacity: 0.55;
-	}
-	.ladder li.now {
-		background: color-mix(in srgb, var(--legend) 18%, var(--surface));
-		color: var(--ink);
-		box-shadow: inset 0 0 0 1.5px var(--legend);
-	}
 	.sec-head {
 		display: flex;
 		align-items: baseline;
@@ -751,9 +715,29 @@
 		height: 15px;
 		font-size: 8px;
 	}
-	.tickets {
-		font-weight: 700;
-		color: #ffcf5c;
+	/* Scratch tickets lying on the pile */
+	.ticket-stub {
+		position: absolute;
+		z-index: 3;
+		bottom: 10%;
+		right: -14px;
+		padding: 7px 10px;
+		border-radius: 8px;
+		background: linear-gradient(135deg, #ffe08a, #ffb347);
+		color: #2a1a00;
+		font: 800 14px var(--mono);
+		border: 2px dashed rgba(120, 70, 0, 0.45);
+		box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.6);
+		rotate: -8deg;
+		white-space: nowrap;
+	}
+	.ticket-stub.alone {
+		position: static;
+		rotate: -6deg;
+		font-size: 16px;
+	}
+	.pile-empty.with-tickets {
+		border-color: rgba(255, 207, 92, 0.55);
 		text-decoration: none;
 	}
 </style>

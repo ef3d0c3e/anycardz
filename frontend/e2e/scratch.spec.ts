@@ -55,3 +55,22 @@ test('scratching by hand draws the ticket at the first touch', async ({ page }) 
 	await expect(ticket.getByRole('status')).toBeVisible();
 	await expect(ticket.locator('.symbol')).toHaveCount(3);
 });
+
+test('the lobby pile shows the tickets and when the next one comes', async ({ page }) => {
+	const name = await newPlayer(page);
+	await sql(
+		"UPDATE users SET tickets = 1, tickets_since = now() - interval '5 minutes' WHERE username = $1",
+		[name]
+	);
+	await visit(page, '/');
+	const pile = page.getByRole('region', { name: 'No packs waiting' });
+	await expect(pile.locator('.ticket-stub')).toHaveText('🎟 ×1');
+	await expect(pile).toContainText('1/3 scratch ticket');
+	await expect(pile).toContainText(/next in 1[45]:\d\d/);
+	await expect(pile.locator('.btn', { hasText: 'Scratch a ticket' })).toHaveAttribute(
+		'href',
+		'/open'
+	);
+	// The streak shows today's reward only
+	await expect(page.getByRole('region', { name: /Day 1/ })).not.toContainText('Day 5+');
+});
