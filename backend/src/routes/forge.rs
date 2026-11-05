@@ -130,7 +130,16 @@ pub async fn roulette(
     }
     let burned: Vec<Rarity> =
         burn.iter().flat_map(|c| std::iter::repeat_n(catalog.cards[&c.card].rarity, c.count as usize)).collect();
-    let chance = game::roulette_chance(target_rarity, &burned);
+    let mut chance = game::roulette_chance(target_rarity, &burned);
+    // Three sparkles on a scratch ticket: doubled, up to a sure win
+    {
+        let mut conn = state.pool.get().await?;
+        let until: Option<chrono::DateTime<chrono::Utc>> =
+            users::table.find(user.id).select(users::roulette_boost_until).get_result(&mut conn).await?;
+        if until.is_some_and(|u| u > chrono::Utc::now()) {
+            chance = crate::scratch::boosted(chance);
+        }
+    }
     let won = game::roulette_roll(&mut rand::rng(), chance);
 
     // The rolled copy and the burned ones come from the same stacks: lock them together

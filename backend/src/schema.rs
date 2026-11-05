@@ -17,6 +17,9 @@ diesel::table! {
         dry_packs -> Int4,
         packs_opened -> Int4,
         roulette_streak -> Int4,
+        tickets -> Int4,
+        tickets_since -> Timestamptz,
+        roulette_boost_until -> Nullable<Timestamptz>,
     }
 }
 

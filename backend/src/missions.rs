@@ -30,6 +30,7 @@ pub enum Event {
     MarketBuy,
     ShopSell,
     FreePacks,
+    Scratch,
 }
 
 pub struct Mission {
@@ -53,6 +54,7 @@ pub const MISSIONS: &[Mission] = &[
     m("market_buy", Event::MarketBuy, 1, 150),
     m("shop_sell", Event::ShopSell, 3, 100),
     m("free_packs", Event::FreePacks, 1, 100),
+    m("scratch", Event::Scratch, 3, 100),
 ];
 
 /// Missions a day

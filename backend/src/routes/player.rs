@@ -76,8 +76,94 @@ struct MeDto {
     terms_outdated: bool,
     free_packs: FreePacksDto,
     missions: crate::missions::MissionsDto,
+    tickets: TicketsDto,
     /// Packs to open before a legendary is guaranteed, the next one included
     pity_left: i32,
+}
+
+#[derive(Serialize)]
+pub struct TicketsDto {
+    count: i32,
+    max: i32,
+    /// When the next one comes, unless the player holds the most
+    next_at: Option<DateTime<Utc>>,
+    /// The foil roulette is doubled until then
+    boost_until: Option<DateTime<Utc>>,
+}
+
+fn tickets_dto(stock: crate::scratch::Stock, boost: Option<DateTime<Utc>>) -> TicketsDto {
+    let now = Utc::now();
+    TicketsDto {
+        count: stock.available(now),
+        max: crate::scratch::MAX,
+        next_at: stock.next_at(now),
+        boost_until: boost.filter(|b| *b > now),
+    }
+}
+
+async fn tickets_of(conn: &mut AsyncPgConnection, uid: i64) -> ApiResult<TicketsDto> {
+    let (count, since, boost): (i32, DateTime<Utc>, Option<DateTime<Utc>>) = users::table
+        .find(uid)
+        .select((users::tickets, users::tickets_since, users::roulette_boost_until))
+        .get_result(conn)
+        .await?;
+    Ok(tickets_dto(crate::scratch::Stock { count, since }, boost))
+}
+
+/// Plays one scratch ticket: the server draws the three slots and pays the prize
+#[post("/tickets/scratch")]
+pub async fn scratch_ticket(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<HttpResponse> {
+    use crate::scratch::{BOOST_HOURS, Prize, Stock, draw};
+    let mut conn = state.pool.get().await?;
+    let uid = user.id;
+    let (prize, slots) = draw(&mut rand::rng());
+    let (coins, pile, tickets) = conn
+        .transaction::<_, ApiError, _>(async move |conn| {
+            let now = Utc::now();
+            let (count, since, boost): (i32, DateTime<Utc>, Option<DateTime<Utc>>) = users::table
+                .find(uid)
+                .select((users::tickets, users::tickets_since, users::roulette_boost_until))
+                .for_update()
+                .get_result(conn)
+                .await?;
+            let left = Stock { count, since }.take(now).ok_or(ApiError::Conflict("no_ticket"))?;
+            // A boost on top of a running one adds its two hours
+            let boost = match prize {
+                Prize::Boost => Some(boost.filter(|b| *b > now).unwrap_or(now) + chrono::Duration::hours(BOOST_HOURS)),
+                _ => boost,
+            };
+            let coins: i64 = diesel::update(users::table.find(uid))
+                .set((
+                    users::tickets.eq(left.count),
+                    users::tickets_since.eq(left.since),
+                    users::roulette_boost_until.eq(boost),
+                    users::coins.eq(users::coins + prize.coins()),
+                ))
+                .returning(users::coins)
+                .get_result(conn)
+                .await?;
+            if prize == Prize::Pack {
+                diesel::insert_into(boosters::table)
+                    .values((boosters::user_id.eq(uid), boosters::collection.eq(game::FREE_PACK)))
+                    .execute(conn)
+                    .await?;
+            }
+            Ok((coins, pile(conn, uid).await?, tickets_dto(left, boost)))
+        })
+        .await?;
+    state.metrics.scratch(prize.as_str());
+    if prize.coins() > 0 {
+        state.metrics.earned("scratch", prize.coins());
+    }
+    crate::missions::progress(&state, uid, crate::missions::Event::Scratch, 1).await;
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "slots": slots,
+        "prize": prize,
+        "coins_won": prize.coins(),
+        "coins": coins,
+        "pile": pile,
+        "tickets": tickets,
+    })))
 }
 
 #[derive(Serialize)]
@@ -165,6 +251,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         terms_outdated: terms != Some(crate::routes::legal::TERMS_VERSION),
         free_packs: free_packs_dto(free_at),
         missions: crate::missions::dto(&mut conn, user.id).await?,
+        tickets: tickets_of(&mut conn, user.id).await?,
         pity_left: game::pity_left(dry),
         username: user.username,
         email: user.email,

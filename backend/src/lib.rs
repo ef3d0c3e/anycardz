@@ -14,6 +14,7 @@ pub mod push;
 pub mod ratelimit;
 pub mod routes;
 pub mod schema;
+pub mod scratch;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

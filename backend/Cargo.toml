@@ -19,7 +19,7 @@ actix-web = { version = "4", default-features = false, features = ["macros", "co
 anyhow = "1"
 argon2 = "0.5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
-diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "chrono", "with-deprecated"] }
+diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "chrono", "with-deprecated", "32-column-tables"] }
 diesel-async = { version = "0.9", features = ["postgres", "deadpool", "migrations"] }
 diesel_migrations = "2.3"
 dotenvy = "0.15"
