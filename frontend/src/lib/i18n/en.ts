@@ -647,5 +647,25 @@ export default {
 		'Notifications are blocked for this site. Allow them in your browser settings, then come back.',
 	'errors.push_disabled': 'Push notifications are not set up on this server.',
 	'errors.push_endpoint': 'This browser’s push service is not supported.',
-	'errors.push_keys': 'The browser sent an unreadable subscription. Try again.'
+	'errors.push_keys': 'The browser sent an unreadable subscription. Try again.',
+
+	'mission.title': 'Daily missions',
+	'mission.heading': '{done} of {total} done',
+	'mission.next': 'New ones in {time}',
+	'mission.bonus': 'All three: a free pack',
+	'mission.bonus_given': 'Free pack added to your pile',
+	'mission.reward': '+{n}',
+	'mission.go': 'Go',
+	'mission.done_label': 'Done',
+	'mission.done': 'Mission done: {name} · +{n} coins',
+	'mission.bonus_done': 'All three missions done: a free pack is in your pile',
+	'mission.open_packs': 'Open {n} packs',
+	'mission.pull_rare': 'Pull {n} rare or legendary cards from packs',
+	'mission.tradeup': 'Do a trade-up in the forge',
+	'mission.roulette': 'Spin the foil roulette',
+	'mission.trade': 'Finish a trade',
+	'mission.market_list': 'Put a card up on the market',
+	'mission.market_buy': 'Buy a card on the market',
+	'mission.shop_sell': 'Sell {n} cards to the shop',
+	'mission.free_packs': 'Claim your free packs'
 } as const;

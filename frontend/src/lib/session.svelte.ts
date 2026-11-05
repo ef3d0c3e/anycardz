@@ -4,6 +4,7 @@ import {
 	type CollectionDto,
 	type FreePacksDto,
 	type MeDto,
+	type MissionsDto,
 	type StreakDto
 } from './types';
 
@@ -20,6 +21,7 @@ export class Session {
 	coins = $state(0);
 	pile = $state<string[]>([]);
 	streak = $state<StreakDto>() as StreakDto;
+	missions = $state<MissionsDto>() as MissionsDto;
 
 	constructor(me: MeDto) {
 		this.update(me);
@@ -36,6 +38,7 @@ export class Session {
 		this.coins = me.coins;
 		this.pile = me.pile;
 		this.streak = me.streak;
+		this.missions = me.missions;
 	}
 }
 

@@ -654,6 +654,26 @@ const fr: Partial<Record<Key, string>> = {
 		'Les notifications sont bloquées pour ce site. Autorise-les dans les réglages du navigateur, puis reviens ici.',
 	'errors.push_disabled': 'Les notifications ne sont pas configurées sur ce serveur.',
 	'errors.push_endpoint': 'Le service de notifications de ce navigateur n’est pas pris en charge.',
-	'errors.push_keys': 'Le navigateur a envoyé un abonnement illisible. Réessaie.'
+	'errors.push_keys': 'Le navigateur a envoyé un abonnement illisible. Réessaie.',
+
+	'mission.title': 'Missions du jour',
+	'mission.heading': '{done} sur {total} faites',
+	'mission.next': 'Nouvelles missions dans {time}',
+	'mission.bonus': 'Les trois : un booster gratuit',
+	'mission.bonus_given': 'Booster gratuit ajouté à ta pile',
+	'mission.reward': '+{n}',
+	'mission.go': 'Y aller',
+	'mission.done_label': 'Faite',
+	'mission.done': 'Mission accomplie : {name} · +{n} pièces',
+	'mission.bonus_done': 'Les trois missions sont faites : un booster gratuit t’attend dans ta pile',
+	'mission.open_packs': 'Ouvre {n} boosters',
+	'mission.pull_rare': 'Tire {n} cartes rares ou légendaires de boosters',
+	'mission.tradeup': 'Fais une fusion à la Forge',
+	'mission.roulette': 'Lance la roulette brillante',
+	'mission.trade': 'Termine un échange',
+	'mission.market_list': 'Mets une carte en vente sur le marché',
+	'mission.market_buy': 'Achète une carte sur le marché',
+	'mission.shop_sell': 'Vends {n} cartes à la boutique',
+	'mission.free_packs': 'Récupère tes boosters gratuits'
 };
 export default fr;

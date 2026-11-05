@@ -9,6 +9,7 @@
 	import Pack from '#lib/components/Pack.svelte';
 	import HoldButton from '#lib/components/HoldButton.svelte';
 	import ScratchTicket from '#lib/components/ScratchTicket.svelte';
+	import Missions from '#lib/components/Missions.svelte';
 	import { getTopup } from '#lib/topup.svelte.ts';
 	import { ApiError } from '#lib/api.ts';
 	import CollectionPicker from '#lib/components/CollectionPicker.svelte';
@@ -154,40 +155,43 @@
 
 <div class="screen">
 	<div class="lobby-grid">
-		<section class="panel pile-hero" aria-labelledby="pile-title">
-			{#if session.pile.length}
-				<!-- Three packs at most: the room their spread needs is reserved beside them -->
-				<a
-					class="pile-stack"
-					href="/open"
-					aria-label={i18n.t('lobby.open_next')}
-					style:--n={Math.min(session.pile.length, MAX_STACK)}
-				>
-					{#each session.pile.slice(0, MAX_STACK).toReversed() as slug, i}
-						{@const c = catalog.get(slug)}
-						{#if c}<Pack
-								collection={c}
-								style="--k:{Math.min(session.pile.length, MAX_STACK) - 1 - i}"
-							/>{/if}
-					{/each}
-					{#if session.pile.length > MAX_STACK}
-						<span class="more">+{session.pile.length - MAX_STACK}</span>
-					{/if}
-				</a>
-			{:else}
-				<div class="pile-empty">{i18n.t('lobby.empty_pile')}</div>
-			{/if}
-			<div class="pile-text">
-				<p class="eyebrow">{i18n.t('lobby.unopened')}</p>
-				<h2 id="pile-title">
-					{session.pile.length
-						? i18n.t('lobby.packs_waiting', { n: session.pile.length })
-						: i18n.t('lobby.no_packs')}
-				</h2>
-				<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
-				{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
-			</div>
-		</section>
+		<div class="side">
+			<section class="panel pile-hero" aria-labelledby="pile-title">
+				{#if session.pile.length}
+					<!-- Three packs at most: the room their spread needs is reserved beside them -->
+					<a
+						class="pile-stack"
+						href="/open"
+						aria-label={i18n.t('lobby.open_next')}
+						style:--n={Math.min(session.pile.length, MAX_STACK)}
+					>
+						{#each session.pile.slice(0, MAX_STACK).toReversed() as slug, i}
+							{@const c = catalog.get(slug)}
+							{#if c}<Pack
+									collection={c}
+									style="--k:{Math.min(session.pile.length, MAX_STACK) - 1 - i}"
+								/>{/if}
+						{/each}
+						{#if session.pile.length > MAX_STACK}
+							<span class="more">+{session.pile.length - MAX_STACK}</span>
+						{/if}
+					</a>
+				{:else}
+					<div class="pile-empty">{i18n.t('lobby.empty_pile')}</div>
+				{/if}
+				<div class="pile-text">
+					<p class="eyebrow">{i18n.t('lobby.unopened')}</p>
+					<h2 id="pile-title">
+						{session.pile.length
+							? i18n.t('lobby.packs_waiting', { n: session.pile.length })
+							: i18n.t('lobby.no_packs')}
+					</h2>
+					<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
+					{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
+				</div>
+			</section>
+			<Missions />
+		</div>
 
 		<div class="side">
 			<section class="panel streak" aria-labelledby="streak-title">

@@ -40,10 +40,14 @@
 			session.notifications++;
 			if (n.kind === 'friend_request') session.friendRequests++;
 			toasts.show(notifText(i18n, catalog, n));
-			// Achievements and sales pay: the balance changed
-			if (n.kind === 'achievement' || n.kind === 'market_sold') {
+			// Achievements, sales and missions pay (a mission bonus is a pack): refresh
+			if (n.kind === 'achievement' || n.kind === 'market_sold' || n.kind === 'mission') {
 				api<MeDto>('/me')
-					.then((me) => (session.coins = me.coins))
+					.then((me) => {
+						session.coins = me.coins;
+						session.pile = me.pile;
+						session.missions = me.missions;
+					})
 					.catch(() => {});
 			}
 			if (n.kind === 'market_sold') invalidate('app:market');

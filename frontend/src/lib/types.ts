@@ -58,6 +58,22 @@ export interface MeDto {
 	free_packs: FreePacksDto;
 	/** Packs to open before a legendary is guaranteed, the next one included */
 	pity_left: number;
+	missions: MissionsDto;
+}
+
+export interface MissionDto {
+	key: string;
+	goal: number;
+	progress: number;
+	coins: number;
+	done: boolean;
+}
+
+export interface MissionsDto {
+	items: MissionDto[];
+	/** All three done: the free pack was given */
+	bonus: boolean;
+	resets_at: string;
 }
 
 export interface FreePacksDto {
@@ -221,7 +237,8 @@ export type NotificationKind =
 	| 'trade_done'
 	| 'trade_cancelled'
 	| 'achievement'
-	| 'market_sold';
+	| 'market_sold'
+	| 'mission';
 
 export interface NotificationDto {
 	id: number;
