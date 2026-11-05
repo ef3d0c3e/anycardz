@@ -72,6 +72,7 @@ Prometheus and Grafana run elsewhere; the API only exposes metrics. They are ser
 | `anycardz_roulette_spins_total` | `result` (won, lost) | Foil roulette |
 | `anycardz_trades_total` | `result` (done, cancelled) | Trades ended |
 | `anycardz_market_listings_total` | `result` (listed, withdrawn, sold) | Marketplace listing events |
+| `anycardz_missions_done_total` | `kind` (mission key, or bonus) | Daily missions finished |
 | `anycardz_push_messages_total` | `result` (sent, gone, failed) | Web Push deliveries; `gone` subscriptions are deleted |
 | `anycardz_market_fees_coins_total` | | Coins taken by the 5% sale fee, gone from the economy |
 | `anycardz_shouts_total` | | Shoutbox messages |
@@ -109,6 +110,7 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | POST   | `/pile/open`             | yes  | `{collection?}`, opens a booster: 5 cards         |
 | POST   | `/streak/claim`          | yes  | Daily bonus                                       |
 | POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 12 h; `/me.free_packs` says when |
+| GET    | `/missions`              | yes  | Today's 3 missions (UTC day) with progress and rewards, and whether the all-three bonus pack was given; also in `/me` |
 | GET    | `/achievements`          | yes  | Every achievement with the player's progress and when it was earned |
 | GET    | `/leaderboards?board=&period=` | yes | `board`: sets, achievements, legendaries, foils, trades, streak; `period`: week or all (streak: all). Top 20 and the caller's rank |
 | GET    | `/push` | yes | `{key, subscribed}`: the VAPID public key (null when push is off) and whether this device is subscribed |
