@@ -69,6 +69,8 @@ Prometheus and Grafana run elsewhere; the API only exposes metrics. They are ser
 | `anycardz_coins_earned_total`, `anycardz_coins_spent_total` | `reason` | Coin flows (signup, streak, sell, topup / booster) |
 | `anycardz_roulette_spins_total` | `result` (won, lost) | Foil roulette |
 | `anycardz_trades_total` | `result` (done, cancelled) | Trades ended |
+| `anycardz_market_listings_total` | `result` (listed, withdrawn, sold) | Marketplace listing events |
+| `anycardz_market_fees_coins_total` | | Coins taken by the 5% sale fee, gone from the economy |
 | `anycardz_shouts_total` | | Shoutbox messages |
 | `anycardz_live_sockets`, `anycardz_online_users` | | Open live sockets, and players behind them |
 | `anycardz_users` | | Registered accounts |
@@ -106,6 +108,11 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 12 h; `/me.free_packs` says when |
 | GET    | `/achievements`          | yes  | Every achievement with the player's progress and when it was earned |
 | GET    | `/leaderboards?board=&period=` | yes | `board`: sets, achievements, legendaries, foils, trades, streak; `period`: week or all (streak: all). Top 20 and the caller's rank |
+| GET    | `/market?q=&card=&collection=&rarity=&foil=&sort=&page=` | yes | Open listings by other players (blocked ones hidden), cheapest first or `sort=new`, 24 a page |
+| GET    | `/market/mine` | yes | The caller's open listings (20 at most) and last 20 sales |
+| POST   | `/market` | yes | `{card, foil, price}`: lists one copy, which leaves the binder. Price from the shop sell price to 10× it |
+| DELETE | `/market/{id}` | yes | Withdraws a listing: the copy comes back as it was |
+| POST   | `/market/{id}/buy` | yes | Buys at the listed price; 5% fee (rounded up) is burned; 3 purchases a day from the same seller |
 | GET    | `/binder`                | yes  | Owned cards and completion per collection         |
 | POST   | `/binder/sell`           | yes  | `{card, foil}`, sells one copy                    |
 | GET    | `/binder?details=1`      | yes  | Same, plus each owned card's details              |
