@@ -149,3 +149,9 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | GET    | `/search?q=`             | yes  | Cards, sets and players; accents and case ignored |
 
 Texts follow the `lang` cookie (`en` or `fr`), then `Accept-Language`.
+
+## License
+
+AnyCardz is free software under the [GNU Affero General Public License v3.0](LICENSE) or later. If you run a modified version for others, the AGPL asks you to offer them its source: the site links to it from the account menu and the sign-in pages, set in `frontend/src/lib/source.ts`.
+
+The card data, [anycardz-data](https://github.com/ef3d0c3e/anycardz-data), is a separate work under [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/). All of its texts and images come from Wikipedia and Wikimedia Commons; each item also keeps the licence and attribution of its source page.

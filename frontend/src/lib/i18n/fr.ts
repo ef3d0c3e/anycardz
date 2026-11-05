@@ -434,6 +434,7 @@ const fr: Partial<Record<Key, string>> = {
 
 	'menu.settings': 'Réglages',
 	'legal.terms': 'Conditions d’utilisation',
+	'legal.source': 'Code source (AGPL)',
 	'legal.privacy': 'Confidentialité',
 	'legal.updated': 'Dernière mise à jour : {date}',
 	'legal.accept_label': 'J’accepte les {terms} et la {privacy}',

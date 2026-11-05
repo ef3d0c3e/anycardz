@@ -19,6 +19,7 @@
 	import { getToasts } from '#lib/session.svelte.ts';
 	import { setLive } from '#lib/live.svelte.ts';
 	import { notifText } from '#lib/notify.ts';
+	import { SOURCE_URL } from '#lib/source.ts';
 	import type { MeDto } from '#lib/types.ts';
 	import { onMount } from 'svelte';
 
@@ -189,6 +190,7 @@
 						<a href="/achievements">{i18n.t('menu.achievements')}</a>
 						<a href="/leaderboards">{i18n.t('menu.leaderboards')}</a>
 						<a href="/settings">{i18n.t('menu.settings')}</a>
+						<a href={SOURCE_URL} rel="noopener">{i18n.t('legal.source')}</a>
 					</nav>
 					<p class="eyebrow">{i18n.t('menu.theme')}</p>
 					<div class="seg" role="group" aria-label={i18n.t('menu.theme')}>

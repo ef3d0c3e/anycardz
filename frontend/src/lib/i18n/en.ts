@@ -431,6 +431,7 @@ export default {
 
 	'menu.settings': 'Settings',
 	'legal.terms': 'Terms of service',
+	'legal.source': 'Source code (AGPL)',
 	'legal.privacy': 'Privacy notice',
 	'legal.updated': 'Last updated {date}',
 	'legal.accept_label': 'I accept the {terms} and the {privacy}',

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SOURCE_URL } from '#lib/source.ts';
 	import type { LayoutProps } from './$types';
 	import Card from '#lib/components/Card.svelte';
 	import { setCatalog } from '#lib/session.svelte.ts';
@@ -21,7 +22,8 @@
 		{@render children()}
 		<p class="legal">
 			<a href="/terms">{i18n.t('legal.terms')}</a> ·
-			<a href="/privacy">{i18n.t('legal.privacy')}</a>
+			<a href="/privacy">{i18n.t('legal.privacy')}</a> ·
+			<a href={SOURCE_URL} rel="noopener">{i18n.t('legal.source')}</a>
 		</p>
 	</div>
 </div>
