@@ -81,6 +81,22 @@ async fn body(res: ServiceResponse) -> Value {
     serde_json::from_slice(&test::read_body(res).await).unwrap_or(Value::Null)
 }
 
+/// Daily missions are random and pay coins: tests that count coins would
+/// flake. A placeholder row stands for today's missions, so none is drawn.
+async fn no_missions(name: &str) {
+    use diesel_async::AsyncConnection;
+    let url = std::env::var("TEST_DATABASE_URL").unwrap();
+    let mut conn = diesel_async::AsyncPgConnection::establish(&url).await.unwrap();
+    diesel::sql_query(
+        "INSERT INTO daily_missions (user_id, day, key)
+         SELECT id, (now() AT TIME ZONE 'utc')::date, 'none' FROM users WHERE username = $1",
+    )
+    .bind::<diesel::sql_types::Text, _>(name)
+    .execute(&mut conn)
+    .await
+    .unwrap();
+}
+
 async fn register<S>(app: &S, name: &str) -> Cookie<'static>
 where
     S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
@@ -93,6 +109,7 @@ where
         .to_request();
     let res = test::call_service(app, req).await;
     assert_eq!(res.status(), 201);
+    no_missions(name).await;
     session(&res)
 }
 
@@ -1775,4 +1792,90 @@ async fn push_subscriptions_follow_devices_and_carry_notifications() {
         .await
         .unwrap();
     assert_eq!(left, 0);
+}
+
+#[actix_web::test]
+async fn daily_missions_pay_once_and_all_three_give_a_pack() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("missions");
+    let cookie = register(&app, &name).await;
+    let uid = get(&app, "/api/me", &cookie).await.1["id"].as_i64().unwrap();
+    {
+        let mut conn = ctx.state.pool.get().await.unwrap();
+        diesel::sql_query("DELETE FROM daily_missions WHERE user_id = $1")
+            .bind::<diesel::sql_types::BigInt, _>(uid)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+    }
+    // Without the placeholder, three are drawn
+    let me = get(&app, "/api/me", &cookie).await.1;
+    assert_eq!(me["missions"]["items"].as_array().unwrap().len(), 3);
+    assert_eq!(me["missions"]["bonus"], false);
+
+    // Today's three, chosen for the test
+    {
+        let mut conn = ctx.state.pool.get().await.unwrap();
+        diesel::sql_query("DELETE FROM daily_missions WHERE user_id = $1")
+            .bind::<diesel::sql_types::BigInt, _>(uid)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        diesel::sql_query(
+            "INSERT INTO daily_missions (user_id, day, key)
+             SELECT $1, (now() AT TIME ZONE 'utc')::date, k FROM unnest(ARRAY['free_packs', 'open_packs', 'shop_sell']) k",
+        )
+        .bind::<diesel::sql_types::BigInt, _>(uid)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    }
+    let missions = |v: &Value| -> Vec<(String, i64, bool)> {
+        v["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| (m["key"].as_str().unwrap().to_owned(), m["progress"].as_i64().unwrap(), m["done"] == true))
+            .collect()
+    };
+    let mission_notes = || async {
+        let (_, n) = get(&app, "/api/notifications", &cookie).await;
+        n["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["kind"] == "mission")
+            .map(|i| i["detail"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(post(&app, "/api/free-packs/claim", &cookie, json!({})).await.0, 200);
+    for _ in 0..3 {
+        assert_eq!(post(&app, "/api/pile/open", &cookie, json!({})).await.0, 200);
+    }
+    let (_, m) = get(&app, "/api/missions", &cookie).await;
+    assert_eq!(
+        missions(&m),
+        vec![("free_packs".into(), 1, true), ("open_packs".into(), 3, true), ("shop_sell".into(), 0, false)]
+    );
+    assert_eq!(m["bonus"], false);
+
+    let cards: Vec<String> = owned(&app, &cookie).await.into_keys().collect();
+    let coins_before = get(&app, "/api/me", &cookie).await.1["coins"].as_i64().unwrap();
+    let mut sold = 0;
+    for card in cards.iter().cycle().take(6) {
+        let (s, r) = post(&app, "/api/binder/sell", &cookie, json!({ "card": card })).await;
+        if s == 200 {
+            sold += r["sold_for"].as_i64().unwrap();
+        }
+    }
+    // The bonus is a free pack in the pile; the mission paid once
+    let (_, me) = get(&app, "/api/me", &cookie).await;
+    assert_eq!(me["missions"]["bonus"], true);
+    assert_eq!(me["pile"], json!(["*"]));
+    assert_eq!(me["coins"].as_i64().unwrap(), coins_before + sold + 100, "shop_sell pays 100, once");
+    let mut notes = mission_notes().await;
+    notes.sort();
+    assert_eq!(notes, vec!["bonus:0", "free_packs:100", "open_packs:150", "shop_sell:100"]);
 }
