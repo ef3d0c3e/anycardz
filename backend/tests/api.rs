@@ -18,6 +18,8 @@ struct Ctx {
 
 async fn ctx() -> Option<Ctx> {
     let _ = dotenvy::dotenv();
+    // Internal errors are logged: a failing test shows them
+    let _ = tracing_subscriber::fmt().with_test_writer().with_env_filter("anycardz_api=error").try_init();
     let Ok(url) = std::env::var("TEST_DATABASE_URL") else {
         eprintln!("TEST_DATABASE_URL not set, skipping");
         return None;
@@ -33,9 +35,16 @@ async fn ctx() -> Option<Ctx> {
         bind: String::new(),
         dev_collections: false,
         secure_cookies: false,
+        trusted_proxies: Vec::new(),
     };
     let catalog = Catalog::load(&config.data_dir, false).unwrap();
-    let state = AppState { pool: db::pool(&url).unwrap(), catalog: Arc::new(catalog), config: Arc::new(config) };
+    let state = AppState {
+        pool: db::pool(&url).unwrap(),
+        live: Default::default(),
+        limits: anycardz_api::ratelimit::AuthLimits::relaxed(),
+        catalog: Arc::new(catalog),
+        config: Arc::new(config),
+    };
     Some(Ctx { state: web::Data::new(state), _cache: cache })
 }
 
@@ -321,6 +330,7 @@ async fn tradeup_rules() {
     }
     assert_eq!(owned(&app, &cookie).await["quartz"], (6, 0), "refused trade-ups take nothing");
     let (_, b) = get(&app, "/api/binder?details=1", &cookie).await;
+    assert_eq!(b["cards"].as_array().unwrap().iter().find(|c| c["card"] == "quartz").unwrap()["patterns"], json!([]));
     assert_eq!(b["details"]["garnet"]["rarity"], "rare");
     assert_eq!(get(&app, "/api/binder", &cookie).await.1["details"], Value::Null);
 
@@ -472,6 +482,15 @@ async fn trade_swaps_cards_and_coins_once_both_seal() {
 
     let a_has = owned(&app, &a).await;
     let b_has = owned(&app, &b).await;
+    // The foil keeps its pattern, and the binder says which
+    let (_, bb) = get(&app, "/api/binder", &b).await;
+    let garnet = bb["cards"].as_array().unwrap().iter().find(|c| c["card"] == "garnet").unwrap().clone();
+    assert_eq!(garnet["patterns"], json!(["foil4"]));
+    let (_, pc) = get(&app, &format!("/api/players/{b_name}/cards"), &a).await;
+    assert_eq!(
+        pc["cards"].as_array().unwrap().iter().find(|c| c["card"] == "garnet").unwrap()["patterns"],
+        json!(["foil4"])
+    );
     assert_eq!(a_has.get("diamond"), Some(&(1, 0)));
     assert!(!a_has.contains_key("garnet") && !a_has.contains_key("quartz"));
     assert_eq!(b_has.get("garnet"), Some(&(1, 1)), "the foil stays foil");
@@ -553,25 +572,28 @@ async fn trade_fails_cleanly_when_cards_are_gone() {
     assert_eq!((s, err["error"].as_str()), (409, Some("trade_unavailable")));
 }
 
+/// Also the regression test for a deadlock between a swap and the notification
+/// of the first seal: several rounds, as it only showed now and then
 #[actix_web::test]
 async fn simultaneous_seals_swap_once() {
     let Some(ctx) = ctx().await else { return };
     let app = app!(ctx);
-    let ((_, a, a_id), (b_name, b, _)) = pair(&app).await;
-    give(&ctx, a_id, "quartz", None, 1).await;
-    let id = post(&app, "/api/trades", &a, json!({ "with": b_name })).await.1["id"].as_i64().unwrap();
-    let uri = format!("/api/trades/{id}");
-    put(&app, &uri, &a, json!({ "version": 1, "give": [{ "card": "quartz" }] })).await;
-    let seal = format!("{uri}/seal");
-    let both = futures_util::future::join_all([
-        post(&app, &seal, &a, json!({ "version": 2 })),
-        post(&app, &seal, &b, json!({ "version": 2 })),
-    ])
-    .await;
-    let (ra, rb) = (&both[0], &both[1]);
-    assert_eq!((ra.0, rb.0), (200, 200));
-    assert_eq!(get(&app, &uri, &a).await.1["state"], "done");
-    assert_eq!(owned(&app, &b).await.get("quartz"), Some(&(1, 0)), "exactly one copy moved");
+    for _ in 0..5 {
+        let ((_, a, a_id), (b_name, b, _)) = pair(&app).await;
+        give(&ctx, a_id, "quartz", None, 1).await;
+        let id = post(&app, "/api/trades", &a, json!({ "with": b_name })).await.1["id"].as_i64().unwrap();
+        let uri = format!("/api/trades/{id}");
+        put(&app, &uri, &a, json!({ "version": 1, "give": [{ "card": "quartz" }], "give_coins": 10 })).await;
+        let seal = format!("{uri}/seal");
+        let both = futures_util::future::join_all([
+            post(&app, &seal, &a, json!({ "version": 2 })),
+            post(&app, &seal, &b, json!({ "version": 2 })),
+        ])
+        .await;
+        assert_eq!((both[0].0, both[1].0), (200, 200), "{both:?}");
+        assert_eq!(get(&app, &uri, &a).await.1["state"], "done");
+        assert_eq!(owned(&app, &b).await.get("quartz"), Some(&(1, 0)), "exactly one copy moved");
+    }
 }
 
 #[actix_web::test]
@@ -604,4 +626,388 @@ async fn trade_permissions_and_search() {
     assert!(found.as_array().unwrap().is_empty(), "% is matched literally");
     let (s, cards) = get(&app, &format!("/api/players/{b_name}/cards"), &a).await;
     assert_eq!((s, cards["cards"].as_array().map(|c| c.len())), (200, Some(0)));
+}
+
+#[actix_web::test]
+async fn shoutbox_rules_and_brags() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let cookie = register(&app, &unique("talker")).await;
+    let uid = get(&app, "/api/me", &cookie).await.1["id"].as_i64().unwrap();
+
+    let (s, err) = post(&app, "/api/shoutbox", &cookie, json!({ "body": "   " })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("empty_message")));
+    let (s, err) = post(&app, "/api/shoutbox", &cookie, json!({ "body": "x".repeat(301) })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("message_too_long")));
+    let (s, err) = post(&app, "/api/shoutbox", &cookie, json!({ "body": "look", "card": { "card": "diamond" } })).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("not_owned")), "brags need the card");
+
+    let (s, msg) = post(&app, "/api/shoutbox", &cookie, json!({ "body": "  hello all  " })).await;
+    assert_eq!((s, msg["body"].as_str()), (201, Some("hello all")));
+    let (s, err) = post(&app, "/api/shoutbox", &cookie, json!({ "body": "again" })).await;
+    assert_eq!((s, err["error"].as_str()), (429, Some("slow_down")), "one message every 2 s");
+
+    // A foil brag carries the pattern of the player's own copy
+    give(&ctx, uid, "diamond", Some("foil5"), 1).await;
+    tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+    let (s, msg) = post(&app, "/api/shoutbox", &cookie, json!({ "card": { "card": "diamond", "foil": true } })).await;
+    assert_eq!((s, msg["card"].as_str(), msg["foil"].as_str()), (201, Some("diamond"), Some("foil5")));
+
+    let (_, history) = get(&app, "/api/shoutbox", &cookie).await;
+    let mine: Vec<_> = history.as_array().unwrap().iter().filter(|m| m["user"] == msg["user"]).collect();
+    assert_eq!(mine.len(), 2);
+    assert_eq!(mine[1]["card"], "diamond", "oldest first");
+
+    let (_, cards) = get(&app, "/api/cards?slugs=quartz,diamond,nope", &Cookie::new("lang", "fr")).await;
+    assert_eq!(cards["quartz"]["title"], "Quartz (fr)");
+    assert!(cards.get("nope").is_none());
+}
+
+#[actix_web::test]
+async fn live_socket_pushes_events() {
+    use futures_util::{SinkExt as _, StreamExt as _};
+    let Some(ctx) = ctx().await else { return };
+    let state = ctx.state.clone();
+    let srv = actix_test::start(move || App::new().app_data(state.clone()).configure(routes::configure));
+
+    // Two players over real HTTP, to get cookies the socket can use
+    let client = awc::Client::default();
+    let mut players = Vec::new();
+    for p in ["sock_a", "sock_b"] {
+        let name = unique(p);
+        let res = client
+            .post(srv.url("/api/auth/register"))
+            .send_json(&json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .await
+            .unwrap();
+        let cookie = res.cookie("session").unwrap().into_owned();
+        players.push((name, cookie));
+    }
+    let connect = |cookie: Cookie<'static>| {
+        let url = srv.url("/api/live");
+        async move {
+            let (_, ws) = awc::Client::new().ws(url).cookie(cookie).connect().await.unwrap();
+            ws
+        }
+    };
+    let mut ws_a = connect(players[0].1.clone()).await;
+    let mut ws_b = connect(players[1].1.clone()).await;
+    async fn next_json(ws: &mut actix_codec::Framed<awc::BoxedSocket, awc::ws::Codec>) -> Value {
+        loop {
+            let frame = tokio::time::timeout(std::time::Duration::from_secs(5), ws.next())
+                .await
+                .expect("event")
+                .unwrap()
+                .unwrap();
+            if let awc::ws::Frame::Text(t) = frame {
+                return serde_json::from_slice(&t).unwrap();
+            }
+        }
+    }
+    let hello = next_json(&mut ws_a).await;
+    assert_eq!(hello["type"], "hello");
+    assert!(hello["messages"].is_array() && hello["pulls"].is_array());
+    next_json(&mut ws_b).await;
+
+    // A chat message reaches everyone
+    let res = client
+        .post(srv.url("/api/shoutbox"))
+        .cookie(players[0].1.clone())
+        .send_json(&json!({ "body": "over the wire" }))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 201);
+    for ws in [&mut ws_a, &mut ws_b] {
+        let ev = next_json(ws).await;
+        assert_eq!((ev["type"].as_str(), ev["body"].as_str()), (Some("chat"), Some("over the wire")));
+    }
+
+    // Trade pings reach the two players only: a third socket sees the next chat first
+    let outsider = register(
+        &test::init_service(App::new().app_data(ctx.state.clone()).configure(routes::configure)).await,
+        &unique("sock_c"),
+    )
+    .await;
+    let mut ws_c = connect(outsider).await;
+    next_json(&mut ws_c).await;
+    let res = client
+        .post(srv.url("/api/trades"))
+        .cookie(players[0].1.clone())
+        .send_json(&json!({ "with": players[1].0 }))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 201);
+    for ws in [&mut ws_a, &mut ws_b] {
+        assert_eq!(next_json(ws).await["type"], "trade");
+    }
+    let note = next_json(&mut ws_b).await;
+    assert_eq!((note["type"].as_str(), note["kind"].as_str()), (Some("notification"), Some("trade_opened")));
+    assert_eq!(note["actor"], players[0].0.as_str());
+    ctx.state.live.pull(anycardz_api::live::PullEvent {
+        user: "x".into(),
+        card: "diamond".into(),
+        rarity: anycardz_api::data::Rarity::Legendary,
+        foil: None,
+        source: anycardz_api::live::PullSource::Pack,
+        at: chrono::Utc::now(),
+    });
+    assert_eq!(next_json(&mut ws_c).await["type"], "pull", "no trade event before it");
+    let _ = ws_a.close().await;
+}
+
+#[actix_web::test]
+async fn profiles_and_avatars() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (_, b, _)) = pair(&app).await;
+    give(&ctx, a_id, "quartz", None, 2).await;
+    give(&ctx, a_id, "diamond", Some("foil1"), 1).await;
+
+    let (s, err) = put(&app, "/api/me/profile", &a, json!({ "bio": "x".repeat(281) })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("bio_too_long")));
+    let (s, _) = put(&app, "/api/me/profile", &a, json!({ "bio": "  I collect minerals  " })).await;
+    assert_eq!(s, 200);
+
+    let (s, p) = get(&app, &format!("/api/players/{}", a_name.to_uppercase()), &b).await;
+    assert_eq!(s, 200);
+    assert_eq!(p["bio"], "I collect minerals");
+    assert_eq!((p["cards"].as_u64(), p["copies"].as_i64(), p["foils"].as_i64()), (Some(2), Some(3), Some(1)));
+    assert_eq!(p["collections"][0], json!({ "slug": "minerals", "owned": 2, "total": 6 }));
+    assert_eq!(p["relation"], "none");
+    assert_eq!(p["avatar"], Value::Null);
+    assert_eq!(get(&app, &format!("/api/players/{a_name}"), &a).await.1["relation"], "self");
+
+    // Avatar: any image, cropped to a 256 px square JPEG
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(400, 200, image::Rgb([200, 30, 30]))
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let req =
+        test::TestRequest::put().uri("/api/me/avatar").cookie(a.clone()).set_payload(png.into_inner()).to_request();
+    let res = test::call_service(&app, req).await;
+    assert_eq!(res.status(), 200);
+    let url = body(res).await["avatar"].as_str().unwrap().to_owned();
+    assert!(url.starts_with(&format!("/api/avatars/{a_name}?v=")));
+    let res = test::call_service(&app, test::TestRequest::get().uri(&url).to_request()).await;
+    assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
+    let img = image::load_from_memory(&test::read_body(res).await).unwrap();
+    assert_eq!((img.width(), img.height()), (256, 256));
+    assert_eq!(get(&app, "/api/me", &a).await.1["avatar"], url.as_str());
+
+    let req = test::TestRequest::put().uri("/api/me/avatar").cookie(a.clone()).set_payload("not an image").to_request();
+    let res = test::call_service(&app, req).await;
+    assert_eq!((res.status().as_u16(), body(res).await["error"].clone()), (422, json!("invalid_image")));
+    let req = test::TestRequest::delete().uri("/api/me/avatar").cookie(a.clone()).to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 200);
+    assert_eq!(test::call_service(&app, test::TestRequest::get().uri(&url).to_request()).await.status(), 404);
+}
+
+async fn del<S>(app: &S, uri: &str, cookie: &Cookie<'static>) -> (u16, Value)
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let res = test::call_service(app, test::TestRequest::delete().uri(uri).cookie(cookie.clone()).to_request()).await;
+    let status = res.status().as_u16();
+    (status, body(res).await)
+}
+
+#[actix_web::test]
+async fn friend_requests() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, _), (b_name, b, _)) = pair(&app).await;
+
+    let (s, r) = post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+    assert_eq!((s, r["relation"].as_str()), (200, Some("request_sent")));
+    assert_eq!(get(&app, &format!("/api/players/{a_name}"), &b).await.1["relation"], "request_received");
+    assert_eq!(get(&app, "/api/me", &b).await.1["friend_requests"], 1);
+    let (_, fb) = get(&app, "/api/friends", &b).await;
+    assert_eq!(fb["incoming"][0]["username"], a_name);
+    let (_, fa) = get(&app, "/api/friends", &a).await;
+    assert_eq!(fa["outgoing"][0]["username"], b_name);
+
+    // Asking back accepts
+    let (_, r) = post(&app, &format!("/api/friends/{a_name}"), &b, json!({})).await;
+    assert_eq!(r["relation"], "friends");
+    let (_, fa) = get(&app, "/api/friends", &a).await;
+    assert_eq!(
+        (fa["friends"][0]["username"].as_str(), fa["friends"][0]["online"].as_bool()),
+        (Some(b_name.as_str()), Some(false))
+    );
+    assert_eq!(fa["outgoing"], json!([]));
+
+    let (_, r) = del(&app, &format!("/api/friends/{a_name}"), &b).await;
+    assert_eq!(r["relation"], "none");
+    let (s, err) = post(&app, &format!("/api/friends/{a_name}"), &a, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("friend_self")));
+}
+
+#[actix_web::test]
+async fn blocking_cuts_contact() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, _), (b_name, b, _)) = pair(&app).await;
+    post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+    post(&app, &format!("/api/friends/{a_name}"), &b, json!({})).await;
+    let words = format!("hi from {b_name}");
+    post(&app, "/api/shoutbox", &b, json!({ "body": words })).await;
+
+    let (_, r) = post(&app, &format!("/api/blocks/{b_name}"), &a, json!({})).await;
+    assert_eq!(r["relation"], "blocked");
+    assert_eq!(get(&app, "/api/friends", &a).await.1["friends"], json!([]), "the friendship ends");
+    assert_eq!(get(&app, "/api/blocks", &a).await.1, json!([{ "username": b_name }]));
+
+    // Neither can reach the other
+    for (who, other) in [(&a, &b_name), (&b, &a_name)] {
+        let (s, err) = post(&app, &format!("/api/friends/{other}"), who, json!({})).await;
+        assert_eq!((s, err["error"].as_str()), (409, Some("player_unavailable")));
+        let (s, err) = post(&app, "/api/trades", who, json!({ "with": other })).await;
+        assert_eq!((s, err["error"].as_str()), (409, Some("player_unavailable")));
+    }
+    // Alice no longer sees Bob's messages; others still do
+    let (_, history) = get(&app, "/api/shoutbox", &a).await;
+    assert!(!history.as_array().unwrap().iter().any(|m| m["body"] == words.as_str()));
+    let (_, history) = get(&app, "/api/shoutbox", &b).await;
+    assert!(history.as_array().unwrap().iter().any(|m| m["body"] == words.as_str()));
+
+    let (_, r) = del(&app, &format!("/api/blocks/{b_name}"), &a).await;
+    assert_eq!(r["relation"], "none");
+    assert_eq!(post(&app, "/api/trades", &a, json!({ "with": b_name })).await.0, 201);
+}
+
+async fn notes<S>(app: &S, cookie: &Cookie<'static>) -> (Vec<String>, i64)
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let (_, n) = get(app, "/api/notifications", cookie).await;
+    let kinds = n["items"].as_array().unwrap().iter().map(|i| i["kind"].as_str().unwrap().to_owned()).collect();
+    (kinds, n["unread"].as_i64().unwrap())
+}
+
+#[actix_web::test]
+async fn notifications_for_friends_and_trades() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, _)) = pair(&app).await;
+
+    post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+    post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+    assert_eq!(notes(&app, &b).await, (vec!["friend_request".to_owned()], 1), "asking twice notifies once");
+    post(&app, &format!("/api/friends/{a_name}"), &b, json!({})).await;
+    assert_eq!(notes(&app, &a).await.0, ["friend_accepted"]);
+    let (_, n) = get(&app, "/api/notifications", &a).await;
+    assert_eq!(
+        (n["items"][0]["actor"].as_str(), n["items"][0]["read"].as_bool()),
+        (Some(b_name.as_str()), Some(false))
+    );
+
+    give(&ctx, a_id, "quartz", None, 2).await;
+    let id = post(&app, "/api/trades", &a, json!({ "with": b_name })).await.1["id"].as_i64().unwrap();
+    let uri = format!("/api/trades/{id}");
+    put(&app, &uri, &a, json!({ "version": 1, "give": [{ "card": "quartz" }] })).await;
+    put(&app, &uri, &a, json!({ "version": 2, "give": [{ "card": "quartz", "count": 2 }] })).await;
+    let (kinds, unread) = notes(&app, &b).await;
+    assert_eq!(kinds, ["trade_changed", "trade_opened", "friend_request"], "edits fold into one notification");
+    assert_eq!(unread, 3);
+    let (_, n) = get(&app, "/api/notifications", &b).await;
+    assert_eq!(n["items"][0]["trade"].as_i64(), Some(id));
+
+    post(&app, &format!("{uri}/seal"), &a, json!({ "version": 3 })).await;
+    assert_eq!(notes(&app, &b).await.0[0], "trade_sealed");
+    post(&app, &format!("{uri}/seal"), &b, json!({ "version": 3 })).await;
+    assert_eq!(notes(&app, &a).await.0[0], "trade_done");
+
+    // Read one, then all
+    let first = get(&app, "/api/notifications", &b).await.1["items"][0]["id"].as_i64().unwrap();
+    let (_, r) = post(&app, "/api/notifications/read", &b, json!({ "ids": [first] })).await;
+    assert_eq!(r["unread"], 3);
+    assert_eq!(get(&app, "/api/me", &b).await.1["notifications"], 3);
+    let (_, r) = post(&app, "/api/notifications/read", &b, json!({})).await;
+    assert_eq!(r["unread"], 0);
+    // Someone else's notifications stay unread
+    assert!(notes(&app, &a).await.1 > 0);
+}
+
+#[actix_web::test]
+async fn search_finds_cards_sets_and_players() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, _), (b_name, b, _)) = pair(&app).await;
+
+    let (_, r) = get(&app, "/api/search?q=MINE", &a).await;
+    assert_eq!(r["collections"][0]["slug"], "minerals");
+    let (_, r) = get(&app, "/api/search?q=quar", &a).await;
+    assert_eq!(r["cards"][0]["slug"], "quartz");
+    // French titles, accents ignored
+    let req = test::TestRequest::get()
+        .uri("/api/search?q=mineraux")
+        .cookie(a.clone())
+        .cookie(Cookie::new("lang", "fr"))
+        .to_request();
+    let r = body(test::call_service(&app, req).await).await;
+    assert_eq!(r["collections"][0]["title"], "Minéraux");
+
+    let (_, r) = get(&app, &format!("/api/search?q={}", &b_name[..7]), &a).await;
+    assert!(r["players"].as_array().unwrap().iter().any(|p| p["username"] == b_name.as_str()));
+    let (_, r) = get(&app, &format!("/api/search?q={a_name}"), &a).await;
+    assert!(r["players"].as_array().unwrap().iter().all(|p| p["username"] != a_name.as_str()), "not yourself");
+    let (_, r) = get(&app, "/api/search?q=q", &b).await;
+    assert_eq!(r["cards"], json!([]), "two letters at least");
+}
+
+#[actix_web::test]
+async fn auth_rate_limits() {
+    let Some(ctx) = ctx().await else { return };
+    // The real limits, on a state of its own
+    let state = web::Data::new(AppState {
+        pool: ctx.state.pool.clone(),
+        live: Default::default(),
+        limits: Default::default(),
+        catalog: ctx.state.catalog.clone(),
+        config: ctx.state.config.clone(),
+    });
+    let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
+    let sign_up = |ip: &str| {
+        let name = unique("lim");
+        test::TestRequest::post()
+            .uri("/api/auth/register")
+            .peer_addr(format!("{ip}:4000").parse().unwrap())
+            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .to_request()
+    };
+    // Sign-ups: five per address, then wait; another address is unaffected
+    for _ in 0..5 {
+        assert_eq!(test::call_service(&app, sign_up("203.0.113.7")).await.status(), 201);
+    }
+    assert_eq!(test::call_service(&app, sign_up("203.0.113.7")).await.status(), 429);
+    assert_eq!(test::call_service(&app, sign_up("203.0.113.8")).await.status(), 201);
+
+    // Five wrong passwords, then the account waits, whatever the address
+    let name = unique("victim");
+    let res = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/auth/register")
+            .peer_addr("192.0.2.50:4000".parse().unwrap())
+            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(res.status(), 201);
+    let login = |password: &str, ip: &str| {
+        test::TestRequest::post()
+            .uri("/api/auth/login")
+            .peer_addr(format!("{ip}:4000").parse().unwrap())
+            .set_json(json!({ "login": name, "password": password }))
+            .to_request()
+    };
+    for _ in 0..5 {
+        assert_eq!(test::call_service(&app, login("wrong-password", "198.51.100.1")).await.status(), 422);
+    }
+    let res = test::call_service(&app, login("123456789", "198.51.100.2")).await;
+    assert_eq!(res.status(), 429, "even the right password waits, from any address");
+    assert!(res.headers().get("retry-after").is_some());
+    let b = body(res).await;
+    assert_eq!(b["error"], "too_many_attempts");
+    assert!((1..=60).contains(&b["retry_after"].as_u64().unwrap()));
 }
