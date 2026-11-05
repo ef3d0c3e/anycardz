@@ -73,15 +73,13 @@
 		const s = Math.max(0, Math.floor((new Date(next).getTime() - Date.now()) / 1000));
 		// Time is up: the button comes back without a reload
 		if (s === 0) session.freePacks = { ...session.freePacks, ready: true, next_at: null };
-		const h = Math.floor(s / 3600);
-		const m = Math.floor(s / 60) % 60;
-		freeLeft = h
-			? `${h} h ${String(m).padStart(2, '0')} min`
-			: `${m} min ${String(s % 60).padStart(2, '0')} s`;
+		freeLeft = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60]
+			.map((v) => String(v).padStart(2, '0'))
+			.join(':');
 	}
 	freeTick();
 	async function claimFree() {
-		if (claimingFree) return;
+		if (claimingFree || !session.freePacks.ready) return;
 		claimingFree = true;
 		try {
 			const res = await post<{ pile: string[]; free_packs: FreePacksDto }>('/free-packs/claim');
@@ -89,7 +87,9 @@
 			freeTick();
 			arp([520, 660, 780]);
 			const target = document.querySelector('[data-nav="open"]');
-			if (target && freeEl) await flyTo(freeEl, target);
+			await nextTick();
+			const loot = freeEl?.querySelector('.loot');
+			if (target && loot) await flyTo(loot, target);
 			session.pile = res.pile;
 			toasts.show(i18n.t('free.added', { n: res.free_packs.count }));
 		} catch (e) {
@@ -187,77 +187,102 @@
 				<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
 				{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
 			</div>
-			<div class="free-strip" aria-labelledby="free-title">
-				<div class="free-text">
-					<h3 id="free-title">{i18n.t('free.title')}</h3>
-					<p>
-						{session.freePacks.ready
-							? i18n.t('free.lead', {
-									n: session.freePacks.count,
-									h: session.freePacks.every_hours
-								})
-							: i18n.t('free.next', { time: freeLeft })}
-					</p>
-				</div>
-				{#if session.freePacks.ready}
-					<button
-						type="button"
-						class="btn free-claim"
-						bind:this={freeEl}
-						disabled={claimingFree}
-						onclick={claimFree}>{i18n.t('free.claim', { n: session.freePacks.count })}</button
-					>
-				{/if}
-			</div>
 		</section>
 
-		<section class="panel streak" aria-labelledby="streak-title">
-			<div class="streak-head">
-				<div>
-					<p class="eyebrow">{i18n.t('streak.title')}</p>
-					<h2 id="streak-title">
-						{i18n.t('streak.day', { n: session.streak.day })}
-						<span class="flame" aria-hidden="true"></span>
-					</h2>
-				</div>
-				<p class="best">{i18n.t('streak.best', { n: session.streak.best })}</p>
-			</div>
-			<div bind:this={ticket}>
-				{#if session.streak.claimed_today}
-					<div class="claimed">
-						<span class="t-label">{i18n.t('streak.today')}</span>
-						<span class="t-val">+{i18n.num(session.streak.reward)}</span>
-						<span class="t-stamp">{i18n.t('streak.claimed')}</span>
+		<div class="side">
+			<section class="panel streak" aria-labelledby="streak-title">
+				<div class="streak-head">
+					<div>
+						<p class="eyebrow">{i18n.t('streak.title')}</p>
+						<h2 id="streak-title">
+							{i18n.t('streak.day', { n: session.streak.day })}
+							<span class="flame" aria-hidden="true"></span>
+						</h2>
 					</div>
+					<p class="best">{i18n.t('streak.best', { n: session.streak.best })}</p>
+				</div>
+				<div bind:this={ticket}>
+					{#if session.streak.claimed_today}
+						<div class="claimed">
+							<span class="t-label">{i18n.t('streak.today')}</span>
+							<span class="t-val">+{i18n.num(session.streak.reward)}</span>
+							<span class="t-stamp">{i18n.t('streak.claimed')}</span>
+						</div>
+					{:else}
+						<ScratchTicket label={i18n.t('streak.scratch')} onScratched={claim}>
+							<span class="t-label">{i18n.t('streak.today')}</span>
+							<span class="t-val">+{i18n.num(session.streak.reward)}</span>
+							<span class="t-sub">{i18n.t('common.coins')}</span>
+						</ScratchTicket>
+					{/if}
+				</div>
+				{#if session.streak.claimed_today}
+					<p class="next">
+						{i18n.t('streak.next', { time: countdown, n: session.streak.next_reward })}
+					</p>
 				{:else}
-					<ScratchTicket label={i18n.t('streak.scratch')} onScratched={claim}>
-						<span class="t-label">{i18n.t('streak.today')}</span>
-						<span class="t-val">+{i18n.num(session.streak.reward)}</span>
-						<span class="t-sub">{i18n.t('common.coins')}</span>
-					</ScratchTicket>
+					<p class="next">
+						{i18n.t('streak.scratch_hint')}
+						<button type="button" class="linkish" onclick={claim}>{i18n.t('streak.reveal')}</button>
+					</p>
 				{/if}
-			</div>
-			{#if session.streak.claimed_today}
+				<ol class="ladder" aria-label={i18n.t('streak.ladder')}>
+					{#each session.streak.rewards as v, i}
+						{@const d = i + 1}
+						{@const now = Math.min(session.streak.day, 5)}
+						<li class:past={d < now} class:now={d === now}>
+							<span>{i18n.t('streak.day', { n: d })}{d === 5 ? '+' : ''}</span><b>{i18n.num(v)}</b>
+						</li>
+					{/each}
+				</ol>
+			</section>
+
+			<section class="panel free" aria-labelledby="free-title">
+				<div class="streak-head">
+					<div>
+						<p class="eyebrow">{i18n.t('free.title')}</p>
+						<h2 id="free-title">{i18n.t('free.heading', { n: session.freePacks.count })}</h2>
+					</div>
+					<p class="best">{i18n.t('free.every', { h: session.freePacks.every_hours })}</p>
+				</div>
+				<div bind:this={freeEl}>
+					{#if session.freePacks.ready}
+						<ScratchTicket label={i18n.t('streak.scratch')} onScratched={claimFree}>
+							{@render freeLoot()}
+						</ScratchTicket>
+					{:else}
+						<div class="claimed">
+							{@render freeLoot()}
+							<span class="t-stamp">{i18n.t('streak.claimed')}</span>
+						</div>
+					{/if}
+				</div>
 				<p class="next">
-					{i18n.t('streak.next', { time: countdown, n: session.streak.next_reward })}
+					{#if session.freePacks.ready}
+						{i18n.t('free.scratch_hint')}
+						<button type="button" class="linkish" onclick={claimFree}
+							>{i18n.t('free.reveal')}</button
+						>
+					{:else}
+						{i18n.t('free.next', { time: freeLeft })}
+					{/if}
 				</p>
-			{:else}
-				<p class="next">
-					{i18n.t('streak.scratch_hint')}
-					<button type="button" class="linkish" onclick={claim}>{i18n.t('streak.reveal')}</button>
-				</p>
-			{/if}
-			<ol class="ladder" aria-label={i18n.t('streak.ladder')}>
-				{#each session.streak.rewards as v, i}
-					{@const d = i + 1}
-					{@const now = Math.min(session.streak.day, 5)}
-					<li class:past={d < now} class:now={d === now}>
-						<span>{i18n.t('streak.day', { n: d })}{d === 5 ? '+' : ''}</span><b>{i18n.num(v)}</b>
-					</li>
-				{/each}
-			</ol>
-		</section>
+			</section>
+		</div>
 	</div>
+
+	{#snippet freeLoot()}
+		<span class="loot" aria-hidden="true">
+			{#if catalog.free}
+				{@const free = catalog.free}
+				{#each { length: session.freePacks.count } as _, i}
+					<Pack collection={free} style="--i:{i}" />
+				{/each}
+			{/if}
+		</span>
+		<span class="t-val">+{session.freePacks.count}</span>
+		<span class="t-sub">{i18n.t('free.packs')}</span>
+	{/snippet}
 
 	<div class="sec-head">
 		<div>
@@ -358,29 +383,41 @@
 		border: 0;
 		overflow: hidden;
 	}
-	.free-strip {
-		flex-basis: 100%;
+	.side {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px 16px;
-		padding-top: 14px;
-		border-top: 1px solid rgba(255, 255, 255, 0.12);
+		flex-direction: column;
+		gap: 16px;
+		min-width: 0;
 	}
-	.free-text h3 {
-		font-size: 15px;
+	.free {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		/* The scratch ticket in the colours of the free packs */
+		--legend: #b05cff;
 	}
-	.free-text p {
-		font-size: 13.5px;
-		color: rgba(238, 240, 255, 0.72);
-		margin-top: 2px;
+	.free h2 {
+		font-size: 26px;
 	}
-	.free-claim {
-		background: linear-gradient(110deg, #6d4cff, #ff4fa3 60%, #ffb347);
-		border-color: transparent;
-		color: #fff;
-		box-shadow: 0 6px 18px -6px rgba(255, 79, 163, 0.7);
+	.loot {
+		display: flex;
+		width: 82px;
+		margin-right: 4px;
+	}
+	.loot :global(.pack) {
+		width: 42px;
+		margin-right: -22px;
+		rotate: calc((var(--i) - 1) * 9deg);
+	}
+	.loot :global(.pack:nth-child(2)) {
+		translate: 0 -4px;
+	}
+	/* The content steps aside for the stamp */
+	.free .claimed {
+		padding-right: 120px;
+	}
+	.claimed .loot {
+		opacity: 0.45;
 	}
 	.pile-hero .eyebrow {
 		color: rgba(238, 240, 255, 0.6);

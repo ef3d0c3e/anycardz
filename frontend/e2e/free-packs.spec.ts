@@ -5,10 +5,13 @@ test('free packs: claimed from the lobby, opened like any other', async ({ page 
 	await newPlayer(page);
 	await reelMode(page, 'all');
 	await visit(page, '/');
-	await page.getByRole('button', { name: 'Claim 3 free packs' }).click();
+	const free = page.getByRole('region', { name: '3 packs' });
+	await expect(free.locator('canvas')).toBeVisible();
+	await free.getByRole('button', { name: 'Reveal the packs' }).click();
 	await expect(page.getByText('3 free packs added to your pile')).toBeVisible();
-	await expect(page.getByRole('button', { name: /claim 3 free packs/i })).toHaveCount(0);
-	await expect(page.getByText(/^Next ones in 1[01] h \d\d min$/)).toBeVisible();
+	await expect(free.getByRole('button', { name: 'Reveal the packs' })).toHaveCount(0);
+	await expect(free.getByText('Claimed')).toBeVisible();
+	await expect(free.getByText(/^Next packs in 1[01]:\d\d:\d\d$/)).toBeVisible();
 	await expect(page.locator('.pile-text h2')).toHaveText('3 packs waiting');
 	await expect(page.locator('.pile-stack .pack.free')).toHaveCount(3);
 
