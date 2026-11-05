@@ -39,6 +39,11 @@ export interface StreakDto {
 export interface MeDto {
 	id: number;
 	username: string;
+	avatar: string | null;
+	/** Friend requests waiting for an answer */
+	friend_requests: number;
+	/** Unread notifications */
+	notifications: number;
 	email: string;
 	coins: number;
 	pile: string[];
@@ -49,6 +54,8 @@ export interface OwnedDto {
 	card: string;
 	count: number;
 	foils: number;
+	/** Pattern of each foil copy, newest first */
+	patterns: string[];
 }
 
 export interface BinderDto {
@@ -113,4 +120,69 @@ export interface TradeSummary {
 export interface PlayerCardsDto {
 	cards: OwnedDto[];
 	details: Record<string, CardDto>;
+}
+
+export interface PullEvent {
+	user: string;
+	card: string;
+	rarity: Rarity;
+	foil: string | null;
+	source: 'pack' | 'tradeup' | 'roulette';
+	at: string;
+}
+
+export interface ChatEvent {
+	id: number;
+	user: string;
+	body: string;
+	card: string | null;
+	foil: string | null;
+	at: string;
+}
+
+export type Relation =
+	'self' | 'none' | 'friends' | 'request_sent' | 'request_received' | 'blocked';
+
+export interface ProfileDto {
+	username: string;
+	bio: string;
+	avatar: string | null;
+	joined: string;
+	online: boolean;
+	cards: number;
+	copies: number;
+	foils: number;
+	collections: { slug: string; owned: number; total: number }[];
+	relation: Relation;
+}
+
+export interface FriendDto {
+	username: string;
+	avatar: string | null;
+	online: boolean;
+}
+
+export interface FriendsDto {
+	friends: FriendDto[];
+	incoming: FriendDto[];
+	outgoing: FriendDto[];
+}
+
+export type NotificationKind =
+	| 'friend_request'
+	| 'friend_accepted'
+	| 'trade_opened'
+	| 'trade_changed'
+	| 'trade_sealed'
+	| 'trade_done'
+	| 'trade_cancelled';
+
+export interface NotificationDto {
+	id: number;
+	kind: NotificationKind;
+	actor: string | null;
+	actor_avatar: string | null;
+	trade: number | null;
+	read: boolean;
+	at: string;
 }

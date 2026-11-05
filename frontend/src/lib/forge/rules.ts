@@ -24,7 +24,10 @@ export const rouletteBonus = (r: Rarity) => ODDS[r][1];
  * Copies of a card the forge may spend: plain copies, keeping one copy of the
  * card overall (a foil counts as the kept copy).
  */
-export function spare(o: OwnedDto | undefined, used = 0): number {
+export function spare(
+	o: (Pick<OwnedDto, 'count' | 'foils'> & Partial<OwnedDto>) | undefined,
+	used = 0
+): number {
 	if (!o) return 0;
 	const plain = o.count - o.foils;
 	const keep = o.foils > 0 ? 0 : 1;

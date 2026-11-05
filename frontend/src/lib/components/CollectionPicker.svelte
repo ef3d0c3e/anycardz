@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import type { CollectionDto } from '#lib/types.ts';
+	import { RECENT_KEY } from '#lib/lobby/shelf.ts';
 
 	interface Props {
 		collections: CollectionDto[];
@@ -22,7 +23,6 @@
 
 	type Sort = 'progress' | 'name' | 'number';
 	type Status = 'all' | 'started' | 'new' | 'complete';
-	const RECENT_KEY = 'anycardz-recent-sets';
 
 	let query = $state('');
 	let sort = $state<Sort>('progress');

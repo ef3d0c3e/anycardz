@@ -21,6 +21,7 @@
 	} from '#lib/forge/rules.ts';
 	import type { CardDto, OwnedDto, Rarity } from '#lib/types.ts';
 	import Card from '#lib/components/Card.svelte';
+	import { foilOf } from '#lib/foil.ts';
 	import HoldButton from '#lib/components/HoldButton.svelte';
 	import CollectionPicker from '#lib/components/CollectionPicker.svelte';
 	import RevealOverlay from '#lib/components/RevealOverlay.svelte';
@@ -52,10 +53,12 @@
 		RANK[b.rarity] - RANK[a.rarity] || a.title.localeCompare(b.title);
 	const cards = $derived(Object.values(details));
 
-	function addOwned(slug: string, plain: number, foil = 0) {
-		const o = owned[slug] ?? { card: slug, count: 0, foils: 0 };
+	function addOwned(slug: string, plain: number, foil = 0, pattern?: string) {
+		const o = owned[slug] ?? { card: slug, count: 0, foils: 0, patterns: [] };
 		o.count += plain + foil;
 		o.foils += foil;
+		if (foil < 0) o.patterns = o.patterns.slice(-foil);
+		if (foil > 0 && pattern) o.patterns = [pattern, ...o.patterns];
 		if (o.count <= 0) delete owned[slug];
 		else owned[slug] = o;
 	}
@@ -310,7 +313,7 @@
 		}
 		await sleep(spinMs + 100);
 		for (const b of spent) addOwned(b.slug, b.foil ? 0 : -1, b.foil ? -1 : 0);
-		if (res.won) addOwned(slug, -1, 1);
+		if (res.won) addOwned(slug, -1, 1, res.foil ?? undefined);
 		else addOwned(slug, -1);
 		burn = [];
 		outcome = { won: res.won, slug, burned: spent.length };
@@ -416,7 +419,7 @@
 								onclick={() => slots.splice(i, 1)}
 								aria-label={i18n.t('forge.slot_remove', { name: details[s.slug].title })}
 							>
-								<Card card={details[s.slug]} foil={s.foil ? 'foil3' : null} />
+								<Card card={details[s.slug]} foil={s.foil ? foilOf(owned[s.slug]) : null} />
 							</button>
 						{:else}
 							<span class="slot" style:--a="{i * 36}deg"
@@ -528,7 +531,10 @@
 					disabled={slots.length >= TRADEUP_COST || left < 1}
 					aria-label={i18n.t('forge.add', { name: c.title })}
 				>
-					<Card card={c} foil={f.plain < 1 && f.foil > 0 ? 'foil3' : null}>
+					<Card
+						card={c}
+						foil={f.plain < 1 && f.foil > 0 ? foilOf(owned[c.slug], usedTU(c.slug, true)) : null}
+					>
 						{#snippet badge()}
 							<span class="c-badge">×{left}</span>
 							{#if left === 1}<span class="c-badge last">{i18n.t('forge.last_copy')}</span>
@@ -644,7 +650,10 @@
 									onclick={() => burn.splice(i, 1)}
 									disabled={spinning}
 									aria-label={i18n.t('forge.unburn', { name: details[b.slug].title })}
-									><Card card={details[b.slug]} foil={b.foil ? 'foil3' : null} /></button
+									><Card
+										card={details[b.slug]}
+										foil={b.foil ? foilOf(owned[b.slug]) : null}
+									/></button
 								>
 							{:else}
 								<span class="muted">{i18n.t('forge.burn_hint')}</span>
@@ -693,7 +702,12 @@
 					disabled={spinning}
 					aria-label={c.title}
 				>
-					<Card card={c} foil={!picking && nextIsFoil(c.slug) ? 'foil3' : null}>
+					<Card
+						card={c}
+						foil={!picking && nextIsFoil(c.slug)
+							? foilOf(owned[c.slug], burnedOf(c.slug, true))
+							: null}
+					>
 						{#snippet badge()}
 							{#if !picking}
 								<span class="c-badge">×{leftRO(c.slug)}</span>

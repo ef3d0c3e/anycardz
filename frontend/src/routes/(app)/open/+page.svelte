@@ -8,12 +8,15 @@
 	import type { CardDto, CollectionDto, OpenedDto, Rarity } from '#lib/types.ts';
 	import Card from '#lib/components/Card.svelte';
 	import Pack from '#lib/components/Pack.svelte';
+	import { getLive } from '#lib/live.svelte.ts';
+	import { brag } from '#lib/brag.ts';
 	import { playPack, ReelRun, type Mode } from '#lib/opening/reels.ts';
 
 	const i18n = getI18n();
 	const session = getSession();
 	const catalog = getCatalog()!;
 	const toasts = getToasts();
+	const live = getLive();
 
 	type Phase = 'empty' | 'sealed' | 'busy' | 'spinning' | 'landed' | 'done';
 	interface Pulled {
@@ -482,6 +485,14 @@
 						<a class="btn primary" href="/">{i18n.t('open.buy_more')}</a>
 					{/if}
 					<a class="btn" href="/binder?set={collection?.slug}">{i18n.t('open.see_binder')}</a>
+					{#if best}
+						<button
+							type="button"
+							class="btn"
+							onclick={() => brag(best.card.slug, !!best.foil, { i18n, live, toasts })}
+							>{i18n.t('live.brag', { name: best.card.title })}</button
+						>
+					{/if}
 				</div>
 			</div>
 		{/if}

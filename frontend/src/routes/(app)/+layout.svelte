@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { refreshAll } from '$app/navigation';
+	import { afterNavigate, refreshAll } from '$app/navigation';
 	import type { LayoutProps } from './$types';
 	import { getI18n, LANGS, type Lang } from '#lib/i18n/index.svelte.ts';
 	import { getTheme, setCookie, THEMES } from '#lib/theme.svelte.ts';
@@ -11,6 +11,13 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import TopupSheet from '#lib/components/TopupSheet.svelte';
 	import { setTopup } from '#lib/topup.svelte.ts';
+	import SidePanel from '#lib/components/SidePanel.svelte';
+	import Avatar from '#lib/components/Avatar.svelte';
+	import NotificationBell from '#lib/components/NotificationBell.svelte';
+	import SearchPalette from '#lib/components/SearchPalette.svelte';
+	import { getToasts } from '#lib/session.svelte.ts';
+	import { setLive } from '#lib/live.svelte.ts';
+	import { onMount } from 'svelte';
 
 	let { data, children }: LayoutProps = $props();
 	const i18n = getI18n();
@@ -20,6 +27,28 @@
 	// svelte-ignore state_referenced_locally
 	const catalog = setCatalog(data.collections);
 	const topup = setTopup();
+	const live = setLive();
+	const toasts = getToasts();
+	onMount(() => {
+		live.start();
+		// New notifications: the count, and a toast unless the page already shows it
+		const off = live.onNotification((n) => {
+			if (n.trade && page.url.pathname === `/trade/${n.trade}`) return;
+			session.notifications++;
+			if (n.kind === 'friend_request') session.friendRequests++;
+			toasts.show(i18n.t(`notif.${n.kind}`, { name: n.actor ?? '?' }));
+		});
+		return () => {
+			off();
+			live.stop();
+		};
+	});
+	const latest = $derived(live.pulls[0]);
+	// The sheet covers the page: going somewhere else closes it
+	afterNavigate(() => {
+		live.panelOpen = false;
+		menuOpen = false;
+	});
 	// Loads rerun after a language switch: keep the shared states in step
 	$effect(() => {
 		session.update(data.me);
@@ -27,6 +56,7 @@
 	});
 
 	let menuOpen = $state(false);
+	let searching = $state(false);
 	let sound = $state(true);
 	$effect(() => {
 		sound = soundOn();
@@ -48,6 +78,7 @@
 		document.documentElement.lang = l;
 		// Card and collection texts come from the API in the new language
 		await refreshAll();
+		live.relocalize();
 	}
 	async function logout() {
 		await post('/auth/logout').catch(() => {});
@@ -72,13 +103,39 @@
 			<Odometer value={session.coins} locale={i18n.lang === 'fr' ? 'fr-FR' : 'en-US'} />
 			<span class="plus" aria-hidden="true">+</span>
 		</button>
+		<button
+			type="button"
+			class="search-btn"
+			onclick={() => (searching = true)}
+			aria-label={i18n.t('search.label')}
+		>
+			<svg viewBox="0 0 24 24" aria-hidden="true"
+				><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg
+			>
+			<span class="search-text">{i18n.t('search.placeholder')}</span>
+			<kbd>Ctrl K</kbd>
+		</button>
+		<NotificationBell />
+		<button
+			type="button"
+			class="chat-btn"
+			aria-label={i18n.t('live.open')}
+			aria-expanded={live.panelOpen}
+			onclick={() => (live.panelOpen = !live.panelOpen)}
+		>
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>
+			{#if live.unread}<span class="badge" aria-label={i18n.t('live.unread', { n: live.unread })}
+					>{live.unread}</span
+				>{/if}
+		</button>
 		<div class="account">
 			<button
 				type="button"
 				class="avatar"
 				aria-expanded={menuOpen}
 				aria-label={i18n.t('menu.account', { name: session.username })}
-				onclick={() => (menuOpen = !menuOpen)}>{session.username[0]?.toUpperCase()}</button
+				onclick={() => (menuOpen = !menuOpen)}
+				><Avatar name={session.username} src={session.avatar} size={38} /></button
 			>
 			{#if menuOpen}
 				<button
@@ -93,6 +150,14 @@
 					aria-label={i18n.t('menu.account', { name: session.username })}
 				>
 					<p class="who"><b>{session.username}</b></p>
+					<nav class="menu-links">
+						<a href="/players/{encodeURIComponent(session.username)}">{i18n.t('menu.profile')}</a>
+						<a href="/friends"
+							>{i18n.t('menu.friends')}{#if session.friendRequests}<span class="count"
+									>{i18n.t('menu.requests', { n: session.friendRequests })}</span
+								>{/if}</a
+						>
+					</nav>
 					<p class="eyebrow">{i18n.t('menu.theme')}</p>
 					<div class="seg" role="group" aria-label={i18n.t('menu.theme')}>
 						{#each THEMES as t}
@@ -152,20 +217,39 @@
 		{/each}
 	</nav>
 
+	{#if latest}
+		{@const c = live.cards[latest.card]}
+		<button type="button" class="ticker" onclick={() => (live.panelOpen = true)}>
+			<span class="live">LIVE</span>
+			{#key `${latest.at}${latest.card}`}
+				<span class="ticker-text"
+					><b>{latest.user}</b> ·
+					<span class="r-tag-{latest.rarity}">{c?.title ?? latest.card}</span></span
+				>
+			{/key}
+		</button>
+	{/if}
+
 	<main class="main">
 		{@render children()}
 	</main>
+
+	<!-- A column on wide screens, a sheet over the page elsewhere -->
+	<aside class="side" class:open={live.panelOpen} aria-label={i18n.t('live.panel')}>
+		<SidePanel onClose={() => (live.panelOpen = false)} />
+	</aside>
 </div>
 
 <TopupSheet />
+<SearchPalette bind:open={searching} />
 
 <style>
 	.shell {
 		min-height: 100%;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto minmax(0, 1fr) auto;
-		grid-template-areas: 'top' 'main' 'nav';
+		grid-template-rows: auto auto minmax(0, 1fr) auto;
+		grid-template-areas: 'top' 'ticker' 'main' 'nav';
 		height: 100dvh;
 	}
 	.top {
@@ -185,6 +269,25 @@
 		text-decoration: none;
 		color: var(--ink);
 		margin-right: auto;
+	}
+	/* Narrow phones: the controls stay, the logo gives way */
+	@media (max-width: 479px) {
+		.top {
+			gap: 6px;
+		}
+		.logo {
+			font-size: 18px;
+			min-width: 0;
+			overflow: hidden;
+			white-space: nowrap;
+			flex-shrink: 1;
+		}
+		.plus {
+			display: none;
+		}
+		.wallet {
+			padding-right: 10px;
+		}
 	}
 	.logo i {
 		font-style: normal;
@@ -234,15 +337,12 @@
 		position: relative;
 	}
 	.avatar {
-		width: 38px;
-		height: 38px;
-		border-radius: 50%;
+		position: relative;
+		padding: 0;
 		border: 0;
+		background: none;
+		border-radius: 50%;
 		display: grid;
-		place-items: center;
-		background: var(--accent);
-		color: var(--accent-ink);
-		font: 800 16px var(--display);
 	}
 	.scrim {
 		position: fixed;
@@ -276,6 +376,30 @@
 		font-size: 15px;
 		padding-bottom: 6px;
 		border-bottom: 1px solid var(--line);
+	}
+	.menu-links {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--line);
+	}
+	.menu-links a {
+		color: var(--ink);
+		text-decoration: none;
+		font-weight: 600;
+		padding: 6px 4px;
+		border-radius: 8px;
+		display: flex;
+		justify-content: space-between;
+		gap: 8px;
+	}
+	.menu-links a:hover {
+		background: var(--surface-2);
+	}
+	.menu-links .count {
+		color: var(--accent);
+		font-size: 12px;
 	}
 	.logout {
 		margin-top: 6px;
@@ -357,11 +481,145 @@
 	}
 
 	/* Tablet and up: the tab bar becomes a rail */
+	.search-btn {
+		display: grid;
+		place-items: center;
+		width: 38px;
+		height: 38px;
+		border-radius: 11px;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		color: var(--muted);
+		flex: none;
+	}
+	.search-btn svg {
+		width: 20px;
+		height: 20px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+	}
+	.search-text,
+	.search-btn kbd {
+		display: none;
+	}
+	/* Desktop: a search field look, with its shortcut */
+	@media (min-width: 900px) {
+		.search-btn {
+			display: flex;
+			gap: 10px;
+			width: auto;
+			min-width: 260px;
+			padding: 0 10px;
+			margin-right: auto;
+			font-size: 13px;
+			background: var(--surface-2);
+		}
+		.search-text {
+			display: inline;
+		}
+		.search-btn kbd {
+			display: inline;
+			margin-left: auto;
+			font: 600 11px var(--mono);
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			padding: 1px 5px;
+			background: var(--surface);
+		}
+	}
+	.chat-btn {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 38px;
+		height: 38px;
+		border-radius: 11px;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		color: var(--ink);
+		flex: none;
+	}
+	.chat-btn svg {
+		width: 20px;
+		height: 20px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linejoin: round;
+	}
+	.chat-btn .badge {
+		top: -5px;
+		right: -5px;
+	}
+	.ticker {
+		grid-area: ticker;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 14px;
+		border: 0;
+		border-bottom: 1px solid var(--line);
+		background: var(--surface);
+		font-size: 12.5px;
+		white-space: nowrap;
+		min-width: 0;
+		text-align: left;
+		color: var(--ink);
+	}
+	.ticker .live {
+		font: 700 10px/1 var(--mono);
+		letter-spacing: 0.1em;
+		color: #fff;
+		background: var(--danger);
+		padding: 4px 6px;
+		border-radius: 5px;
+		flex: none;
+	}
+	.ticker-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+		animation: tin 0.45s ease-out;
+	}
+	.ticker-text span {
+		color: var(--rc);
+		font-weight: 700;
+	}
+	@keyframes tin {
+		from {
+			transform: translateY(100%);
+			opacity: 0;
+		}
+	}
+	.side {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		transform: translateY(102%);
+		transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+		visibility: hidden;
+	}
+	.side.open {
+		transform: none;
+		visibility: visible;
+	}
 	@media (min-width: 700px) {
 		.shell {
 			grid-template-columns: 86px minmax(0, 1fr);
 			grid-template-rows: auto minmax(0, 1fr);
 			grid-template-areas: 'top top' 'nav main';
+		}
+		.ticker {
+			display: none;
+		}
+		.side {
+			left: auto;
+			width: 360px;
+			border-left: 1px solid var(--line);
+			box-shadow: var(--shadow);
+			transform: translateX(102%);
 		}
 		.nav {
 			flex-direction: column;
@@ -392,6 +650,27 @@
 		}
 		.logo {
 			margin-right: auto;
+		}
+	}
+	/* Desktop: the panel is a column, always there */
+	@media (min-width: 1080px) {
+		.shell {
+			grid-template-columns: 86px minmax(0, 1fr) 320px;
+			grid-template-areas: 'top top top' 'nav main side';
+		}
+		.side {
+			position: static;
+			grid-area: side;
+			transform: none;
+			visibility: visible;
+			width: auto;
+			box-shadow: none;
+			z-index: 1;
+			min-height: 0;
+		}
+		.side :global(.x),
+		.chat-btn {
+			display: none;
 		}
 	}
 </style>

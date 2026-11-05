@@ -46,6 +46,12 @@ export class I18n {
 	/** Message for an API error code */
 	error = (e: unknown) => {
 		const code = (e as { code?: string })?.code ?? 'internal';
+		const wait = (e as { retryAfter?: number })?.retryAfter;
+		if (code === 'too_many_attempts' && wait) {
+			return wait < 90
+				? this.t('errors.too_many_attempts', { n: wait })
+				: this.t('errors.too_many_attempts_min', { n: Math.ceil(wait / 60) });
+		}
 		const key = `errors.${code}` as Key;
 		return key in en ? this.t(key) : this.t('errors.internal');
 	};

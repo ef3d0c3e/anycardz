@@ -598,6 +598,12 @@ p {
 	letter-spacing: -0.03em;
 	text-shadow: 0 1cqi 4cqi rgba(0, 0, 0, 0.45);
 	text-wrap: balance;
+	/* Two lines at most: a third pushes the card onto the label below */
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 .pk-feature {
 	position: relative;
@@ -633,9 +639,14 @@ p {
 	flex: 1;
 }
 .pk-meta {
-	font: 700 5.6cqi/1 var(--mono);
-	letter-spacing: 0.12em;
+	font: 700 5.2cqi/1 var(--mono);
+	letter-spacing: 0.06em;
 	text-transform: uppercase;
+	/* One line, inside the crimps, whatever the language */
+	white-space: nowrap;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	position: relative;
 	z-index: 1;
 	opacity: 0.85;

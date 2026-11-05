@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount, tick as nextTick } from 'svelte';
 	import type { PageProps } from './$types';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getCatalog, getSession, getToasts } from '#lib/session.svelte.ts';
@@ -11,12 +11,16 @@
 	import ScratchTicket from '#lib/components/ScratchTicket.svelte';
 	import { getTopup } from '#lib/topup.svelte.ts';
 	import { ApiError } from '#lib/api.ts';
+	import CollectionPicker from '#lib/components/CollectionPicker.svelte';
+	import { readRecent, SHELF_MAX, shelfOrder } from '#lib/lobby/shelf.ts';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
 	const session = getSession();
 	const catalog = getCatalog()!;
 	const toasts = getToasts();
+	/** Packs drawn in the pile; a badge counts the rest */
+	const MAX_STACK = 3;
 	const topup = getTopup();
 
 	const pileNames = $derived(
@@ -55,6 +59,24 @@
 	tick();
 	const timer = setInterval(tick, 1000);
 	onDestroy(() => clearInterval(timer));
+
+	// ---- shelf: a short list, the rest behind the set picker ----
+	let recent = $state<string[]>([]);
+	let browsing = $state(false);
+	let flash = $state('');
+	let shelfEl = $state<HTMLElement>();
+	onMount(() => (recent = readRecent()));
+	const shelf = $derived(shelfOrder(catalog.collections, data.binder.collections, recent));
+	async function picked(slug: string) {
+		browsing = false;
+		// The picker remembered it: it comes first now
+		recent = readRecent();
+		flash = slug;
+		await nextTick();
+		shelfEl?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+		shelfEl?.scrollTo({ left: 0, behavior: 'smooth' });
+		setTimeout(() => (flash = ''), 1600);
+	}
 
 	// ---- shop ----
 	const packs = $state<Record<string, HTMLElement>>({});
@@ -95,14 +117,23 @@
 	<div class="lobby-grid">
 		<section class="panel pile-hero" aria-labelledby="pile-title">
 			{#if session.pile.length}
-				<a class="pile-stack" href="/open" aria-label={i18n.t('lobby.open_next')}>
-					{#each session.pile.slice(0, 4).toReversed() as slug, i}
+				<!-- Three packs at most: the room their spread needs is reserved beside them -->
+				<a
+					class="pile-stack"
+					href="/open"
+					aria-label={i18n.t('lobby.open_next')}
+					style:--n={Math.min(session.pile.length, MAX_STACK)}
+				>
+					{#each session.pile.slice(0, MAX_STACK).toReversed() as slug, i}
 						{@const c = catalog.get(slug)}
 						{#if c}<Pack
 								collection={c}
-								style="--k:{Math.min(session.pile.length, 4) - 1 - i}"
+								style="--k:{Math.min(session.pile.length, MAX_STACK) - 1 - i}"
 							/>{/if}
 					{/each}
+					{#if session.pile.length > MAX_STACK}
+						<span class="more">+{session.pile.length - MAX_STACK}</span>
+					{/if}
 				</a>
 			{:else}
 				<div class="pile-empty">{i18n.t('lobby.empty_pile')}</div>
@@ -168,14 +199,21 @@
 	</div>
 
 	<div class="sec-head">
-		<h2>{i18n.t('lobby.boosters')}</h2>
-		<p>{i18n.t('lobby.odds')}</p>
+		<div>
+			<h2>{i18n.t('lobby.boosters')}</h2>
+			<p>{i18n.t('lobby.odds')}</p>
+		</div>
+		{#if catalog.collections.length > SHELF_MAX}
+			<button type="button" class="btn sm" aria-haspopup="dialog" onclick={() => (browsing = true)}
+				>{i18n.t('lobby.browse', { n: catalog.collections.length })}</button
+			>
+		{/if}
 	</div>
-	<div class="shelf">
-		{#each catalog.collections as c (c.slug)}
+	<div class="shelf" bind:this={shelfEl}>
+		{#each shelf as c (c.slug)}
 			{@const owned = data.binder.collections[c.slug] ?? 0}
 			{@const short = session.coins < c.price}
-			<article class="shelf-item">
+			<article class="shelf-item" class:flash={flash === c.slug}>
 				<div class="pack-wrap" bind:this={packs[c.slug]}><Pack collection={c} /></div>
 				<h3 title={c.title}>{c.title}</h3>
 				<div class="own">
@@ -184,19 +222,33 @@
 				</div>
 				<HoldButton
 					class="btn buy {short ? 'short' : ''}"
+					label={i18n.t(short ? 'lobby.topup_label' : 'lobby.buy_label', {
+						name: c.title,
+						price: c.price
+					})}
 					ms={short ? 350 : 650}
 					onDone={() => buy(c.slug)}
 					onProgress={(p) =>
 						Math.round(p * 100) % 20 === 0 && tone(300 + p * 500, 0.03, 'sine', 0.03)}
 					onTooShort={() => (short ? askTopup(c.slug) : toasts.show(i18n.t('lobby.keep_holding')))}
 				>
-					<span>{short ? i18n.t('lobby.topup_to_buy') : i18n.t('lobby.hold_to_buy')}</span>
 					<span class="price"><span class="coin">c</span>{c.price}</span>
+					<span class="verb">{short ? i18n.t('lobby.topup_short') : i18n.t('lobby.hold')}</span>
 				</HoldButton>
 			</article>
 		{/each}
 	</div>
 </div>
+
+{#if browsing}
+	<CollectionPicker
+		collections={catalog.collections}
+		completion={data.binder.collections}
+		current=""
+		onPick={picked}
+		onClose={() => (browsing = false)}
+	/>
+{/if}
 
 <style>
 	.screen {
@@ -253,19 +305,36 @@
 		aspect-ratio: 5/8;
 		flex: none;
 		display: block;
-		margin: 8px 6px 8px 4px;
+		/* Room for the spread of the packs behind, hover fan included */
+		margin: 8px calc(10px + (var(--n) - 1) * 22px) 8px 4px;
 	}
 	.pile-stack :global(.pack) {
 		position: absolute;
 		inset: 0;
-		transform: rotate(calc((var(--k) * 6deg) - 2deg))
-			translate(calc(var(--k) * 7px), calc(var(--k) * 3px));
+		transform: rotate(calc((var(--k) * 5deg) - 2deg))
+			translate(calc(var(--k) * 6px), calc(var(--k) * 3px));
 		transition: transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
 	}
 	.pile-stack:hover :global(.pack),
 	.pile-stack:focus-visible :global(.pack) {
-		transform: rotate(calc((var(--k) * 11deg) - 6deg))
-			translate(calc(var(--k) * 16px), calc(var(--k) * -4px));
+		transform: rotate(calc((var(--k) * 8deg) - 4deg))
+			translate(calc(var(--k) * 10px), calc(var(--k) * -4px));
+	}
+	.more {
+		position: absolute;
+		top: -8px;
+		left: -6px;
+		z-index: 2;
+		min-width: 30px;
+		height: 30px;
+		padding: 0 8px;
+		border-radius: 15px;
+		display: grid;
+		place-items: center;
+		background: var(--felt-ink);
+		color: var(--felt);
+		font: 800 14px var(--mono);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 	}
 	.pile-empty {
 		display: grid;
@@ -293,7 +362,25 @@
 	.pile-text p {
 		color: rgba(238, 240, 255, 0.75);
 	}
+	/* Phones: a smaller stack, so the text keeps a usable width */
+	@media (max-width: 599px) {
+		.pile-hero {
+			gap: 14px;
+		}
+		.pile-stack,
+		.pile-empty {
+			width: min(104px, 27vw);
+		}
+		.pile-stack {
+			margin-right: calc(6px + (var(--n) - 1) * 18px);
+		}
+		.pile-text h2 {
+			font-size: 24px;
+		}
+	}
 	.pile-text .btn {
+		white-space: normal;
+		text-align: center;
 		margin-top: 6px;
 		background: var(--felt-ink);
 		color: var(--felt);
@@ -459,6 +546,15 @@
 		transform: translateY(-6px) rotate(-2deg);
 	}
 	/* Two lines whatever the name: rows of buttons stay aligned */
+	.shelf-item.flash .pack-wrap {
+		animation: picked 0.8s ease-in-out 2;
+	}
+	@keyframes picked {
+		50% {
+			transform: translateY(-10px) scale(1.04);
+			filter: drop-shadow(0 0 18px var(--accent));
+		}
+	}
 	.shelf-item h3 {
 		font-size: 15px;
 		line-height: 1.15;
@@ -489,6 +585,14 @@
 		height: 100%;
 		background: var(--ok);
 		border-radius: 3px;
+	}
+	.verb {
+		font-weight: 600;
+		opacity: 0.8;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 	.shelf-item :global(.buy) {
 		margin-top: auto;

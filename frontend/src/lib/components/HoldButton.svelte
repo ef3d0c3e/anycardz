@@ -6,6 +6,8 @@
 		disabled?: boolean;
 		class?: string;
 		fill?: string;
+		/** Accessible name, when the visible text is short */
+		label?: string;
 		onDone: () => void;
 		onProgress?: (p: number) => void;
 		onCancel?: () => void;
@@ -18,6 +20,7 @@
 		disabled = false,
 		class: cls = '',
 		fill,
+		label,
 		onDone,
 		onProgress,
 		onCancel,
@@ -61,6 +64,7 @@
 <button
 	type="button"
 	class="hold {cls}"
+	aria-label={label}
 	class:holding
 	{disabled}
 	style:--p={p}

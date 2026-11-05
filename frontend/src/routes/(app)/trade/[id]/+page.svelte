@@ -8,12 +8,15 @@
 	import { change, diff, onSide, type Diff, type Line } from '#lib/trade/offer.ts';
 	import type { CardDto, MeDto, OwnedDto, TradeDto } from '#lib/types.ts';
 	import Card from '#lib/components/Card.svelte';
+	import { foilOf } from '#lib/foil.ts';
 	import SlideConfirm from '#lib/components/SlideConfirm.svelte';
+	import { getLive } from '#lib/live.svelte.ts';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
 	const session = getSession();
 	const toasts = getToasts();
+	const live = getLive();
 
 	// svelte-ignore state_referenced_locally
 	let trade = $state<TradeDto>(data.trade);
@@ -165,12 +168,18 @@
 		if (next) apply(next);
 	}
 
-	// No push channel yet (AC-27): poll while the trade is open and the tab is visible
+	// The live socket says when the trade changes; a slow poll covers a dropped socket
 	onMount(() => {
+		const off = live.onTrade((id) => id === trade.id && !busy && refresh());
 		const t = setInterval(() => {
-			if (open && !busy && document.visibilityState === 'visible') refresh();
+			if (open && !busy && document.visibilityState === 'visible' && !live.connected) refresh();
 		}, 2000);
-		return () => clearInterval(t);
+		const slow = setInterval(() => open && !busy && refresh(), 15_000);
+		return () => {
+			off();
+			clearInterval(t);
+			clearInterval(slow);
+		};
 	});
 
 	const count = (lines: Line[]) => lines.reduce((s, l) => s + l.count, 0);
@@ -212,7 +221,10 @@
 						disabled={!open || busy}
 						aria-label={i18n.t('trade.remove', { name: details[l.card]?.title ?? l.card })}
 					>
-						{#if details[l.card]}<Card card={details[l.card]} foil={l.foil ? 'foil3' : null} />{/if}
+						{#if details[l.card]}<Card
+								card={details[l.card]}
+								foil={l.foil ? foilOf((which === 'mine' ? mineOwned : theirsOwned)[l.card]) : null}
+							/>{/if}
 					</button>
 				{/each}
 			{/each}
@@ -221,7 +233,10 @@
 					class="tcard removed"
 					aria-label="{i18n.t('trade.removed')}: {details[l.card]?.title}"
 				>
-					{#if details[l.card]}<Card card={details[l.card]} foil={l.foil ? 'foil3' : null} />{/if}
+					{#if details[l.card]}<Card
+							card={details[l.card]}
+							foil={l.foil ? foilOf((which === 'mine' ? mineOwned : theirsOwned)[l.card]) : null}
+						/>{/if}
 				</span>
 			{/each}
 			{#if !s.cards.length && !changes?.[which].removed.length}
@@ -266,7 +281,11 @@
 		<span class="avatar big">{partner[0]?.toUpperCase()}</span>
 		<div>
 			<p class="eyebrow">{i18n.t(`trade.eyebrow_${trade.state}`)}</p>
-			<h1>{i18n.t('trade.title', { name: partner })}</h1>
+			<h1>
+				<a class="partner" href="/players/{encodeURIComponent(partner)}"
+					>{i18n.t('trade.title', { name: partner })}</a
+				>
+			</h1>
 		</div>
 	</div>
 	<p class="lead">
@@ -334,7 +353,12 @@
 						disabled={busy || f.plain + f.foil < 1}
 						aria-label={c.title}
 					>
-						<Card card={c} foil={f.plain < 1 && f.foil > 0 ? 'foil3' : null}>
+						<Card
+							card={c}
+							foil={f.plain < 1 && f.foil > 0
+								? foilOf((drawer === 'mine' ? mineOwned : theirsOwned)[o.card])
+								: null}
+						>
 							{#snippet badge()}<span class="c-badge" class:lacking>×{f.plain + f.foil}</span
 								>{/snippet}
 						</Card>
@@ -361,6 +385,13 @@
 		.screen {
 			padding: 24px;
 		}
+	}
+	.partner {
+		color: inherit;
+		text-decoration: none;
+	}
+	.partner:hover {
+		text-decoration: underline;
 	}
 	.back {
 		color: var(--muted);

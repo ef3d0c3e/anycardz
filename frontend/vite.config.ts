@@ -22,6 +22,6 @@ export default defineConfig({
 	},
 	server: {
 		// Browser calls to /api reach the API with their cookies, same origin
-		proxy: { '/api': { target: api, changeOrigin: false } }
+		proxy: { '/api': { target: api, changeOrigin: false, ws: true } }
 	}
 });

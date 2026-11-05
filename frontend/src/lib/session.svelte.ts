@@ -4,6 +4,9 @@ import type { CollectionDto, MeDto, StreakDto } from './types';
 /** The logged-in player, kept in sync with API responses */
 export class Session {
 	username = $state('');
+	avatar = $state<string | null>(null);
+	friendRequests = $state(0);
+	notifications = $state(0);
 	coins = $state(0);
 	pile = $state<string[]>([]);
 	streak = $state<StreakDto>() as StreakDto;
@@ -13,6 +16,9 @@ export class Session {
 	}
 	update(me: MeDto) {
 		this.username = me.username;
+		this.avatar = me.avatar;
+		this.friendRequests = me.friend_requests;
+		this.notifications = me.notifications;
 		this.coins = me.coins;
 		this.pile = me.pile;
 		this.streak = me.streak;

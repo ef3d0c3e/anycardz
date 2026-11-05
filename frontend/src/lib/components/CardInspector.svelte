@@ -5,7 +5,10 @@
 	import { flyCoins, pad3 } from '#lib/fx.ts';
 	import type { CardDto, OwnedDto } from '#lib/types.ts';
 	import Card from './Card.svelte';
+	import { foilOf } from '#lib/foil.ts';
 	import SlideConfirm from './SlideConfirm.svelte';
+	import { getLive } from '#lib/live.svelte.ts';
+	import { brag } from '#lib/brag.ts';
 
 	interface Props {
 		card: CardDto;
@@ -19,6 +22,7 @@
 	const session = getSession();
 	const toasts = getToasts();
 	const catalog = getCatalog();
+	const live = getLive();
 
 	const PRICE = { common: 10, rare: 50, legendary: 250 } as const;
 	const RATE = { common: '80%', rare: '15%', legendary: '5%' } as const;
@@ -63,7 +67,7 @@
 		<button type="button" class="x" onclick={onClose} aria-label={i18n.t('common.close')}>✕</button>
 		<div class="ins-card" bind:this={cardEl}>
 			{#if count}
-				<Card {card} foil={foils ? 'foil3' : null} tilt large />
+				<Card {card} foil={foilOf(owned)} tilt large />
 			{:else}
 				<div class="card ghost r-tag-{card.rarity}">
 					<img src={artUrl(card.slug)} alt="" />
@@ -105,6 +109,13 @@
 						onConfirm={sell}
 					/>
 				{/key}
+				<button
+					type="button"
+					class="btn sm brag"
+					onclick={() => brag(card.slug, foils > 0, { i18n, live, toasts })}
+				>
+					{i18n.t('live.brag', { name: card.title })}
+				</button>
 			{:else}
 				<p class="muted">{i18n.t('inspect.pull_hint')}</p>
 			{/if}
@@ -187,6 +198,9 @@
 		border-radius: 6px;
 		background: color-mix(in srgb, var(--rc) 18%, transparent);
 		color: var(--rc);
+		align-self: flex-start;
+	}
+	.brag {
 		align-self: flex-start;
 	}
 	.x {

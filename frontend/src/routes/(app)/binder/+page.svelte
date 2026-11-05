@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page as nav } from '$app/state';
 	import type { PageProps } from './$types';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getCatalog } from '#lib/session.svelte.ts';
@@ -8,6 +9,7 @@
 	import { pad3, tone } from '#lib/fx.ts';
 	import type { CardDto, OwnedDto } from '#lib/types.ts';
 	import Card from '#lib/components/Card.svelte';
+	import { foilOf } from '#lib/foil.ts';
 	import CardInspector from '#lib/components/CardInspector.svelte';
 	import CollectionPicker from '#lib/components/CollectionPicker.svelte';
 
@@ -30,6 +32,11 @@
 	let page = $state(0);
 	let spread = $state(false);
 	let inspecting = $state<CardDto | null>(null);
+	// ?card= opens that card's inspector (links from search)
+	$effect(() => {
+		const slug = nav.url.searchParams.get('card');
+		if (slug) inspecting = data.collection.cards?.find((c) => c.slug === slug) ?? null;
+	});
 	let slide = $state<'l' | 'r' | ''>('');
 
 	onMount(() => {
@@ -125,7 +132,13 @@
 		if (left.count === 0) {
 			delete owned[slug];
 			completion[data.collection.slug] = Math.max(0, (completion[data.collection.slug] ?? 1) - 1);
-		} else owned[slug] = { card: slug, ...left };
+		} else {
+			// A foil sale takes the newest foil copy: the first pattern
+			const old = owned[slug];
+			const patterns =
+				old && left.foils < old.foils ? old.patterns.slice(1) : (old?.patterns ?? []);
+			owned[slug] = { card: slug, ...left, patterns };
+		}
 	}
 </script>
 
@@ -199,7 +212,7 @@
 									: `#${c.number}, ${i18n.t('binder.not_found')}`}
 							>
 								{#if o}
-									<Card card={c} foil={o.foils ? 'foil3' : null} tilt>
+									<Card card={c} foil={foilOf(o)} tilt>
 										{#snippet badge()}
 											{#if o.count > 1}<span class="c-badge">×{o.count}</span>{/if}
 											{#if o.foils}<span class="c-badge foilb">{i18n.t('card.foil')}</span>{/if}

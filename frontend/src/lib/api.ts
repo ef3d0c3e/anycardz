@@ -2,7 +2,9 @@
 export class ApiError extends Error {
 	constructor(
 		public status: number,
-		public code: string
+		public code: string,
+		/** Seconds to wait, on too_many_attempts */
+		public retryAfter?: number
 	) {
 		super(code);
 	}
@@ -27,7 +29,7 @@ export async function api<T>(
 		throw new ApiError(0, 'network');
 	}
 	const body = await res.json().catch(() => null);
-	if (!res.ok) throw new ApiError(res.status, body?.error ?? 'internal');
+	if (!res.ok) throw new ApiError(res.status, body?.error ?? 'internal', body?.retry_after);
 	return body as T;
 }
 
