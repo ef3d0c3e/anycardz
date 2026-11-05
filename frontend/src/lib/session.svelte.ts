@@ -87,14 +87,27 @@ interface Toast {
 	kind: '' | 'warn';
 }
 export class Toasts {
+	/** On screen: two at most, so a burst (a pack unlocking several achievements) never floods it */
 	list = $state<Toast[]>([]);
+	#waiting: Toast[] = [];
 	#next = 0;
+	static readonly VISIBLE = 2;
+	static readonly MS = 3400;
 	show = (text: string, kind: Toast['kind'] = '') => {
-		const id = this.#next++;
-		// A burst (a pack unlocking several achievements) shows the latest two
-		this.list = [...this.list.slice(-1), { id, text, kind }];
-		setTimeout(() => (this.list = this.list.filter((t) => t.id !== id)), 3400);
+		this.#waiting.push({ id: this.#next++, text, kind });
+		this.#pump();
 	};
+	/** The waiting ones take the free places, in order */
+	#pump() {
+		while (this.list.length < Toasts.VISIBLE && this.#waiting.length) {
+			const t = this.#waiting.shift()!;
+			this.list = [...this.list, t];
+			setTimeout(() => {
+				this.list = this.list.filter((x) => x.id !== t.id);
+				this.#pump();
+			}, Toasts.MS);
+		}
+	}
 }
 const TOASTS = Symbol('toasts');
 export const setToasts = () => setContext(TOASTS, new Toasts());
