@@ -1,6 +1,8 @@
-//! Set completion: owning every card of a collection pays coins once and leaves
-//! a badge on the profile; owning every one of them as a foil pays more. Both
-//! are achievements (`set:<slug>`, `foilset:<slug>`): earned once, never lost.
+//! Achievements, earned once and never lost, each paying coins once:
+//! - set completion: every card of a collection (`set:<slug>`), every one as a
+//!   foil (`foilset:<slug>`);
+//! - the fixed list in ACHIEVEMENTS: one-off events (a first legendary) and
+//!   goals on counters (packs opened, trades done...).
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -11,7 +13,108 @@ use serde::Serialize;
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
-use crate::schema::{achievements, owned_cards, users};
+use crate::schema::{achievements, friendships, owned_cards, streaks, trades, users};
+
+/// What a goal counts
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Metric {
+    /// Packs opened (counted from when achievements arrived)
+    Packs,
+    /// Trades done
+    Trades,
+    /// Sets completed
+    Sets,
+    /// Accepted friends
+    Friends,
+    /// Distinct cards owned
+    Cards,
+    /// Best daily streak
+    Streak,
+    /// Foil roulette wins in a row, right now
+    RouletteStreak,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Achievement {
+    pub id: &'static str,
+    pub coins: i64,
+    /// Earned when the metric reaches the number; None: earned on an event
+    pub goal: Option<(Metric, i64)>,
+}
+
+const fn a(id: &'static str, coins: i64, goal: Option<(Metric, i64)>) -> Achievement {
+    Achievement { id, coins, goal }
+}
+
+/// Every achievement besides sets, in the order players see them
+pub const ACHIEVEMENTS: &[Achievement] = &[
+    a("first_pack", 50, Some((Metric::Packs, 1))),
+    a("packs_50", 300, Some((Metric::Packs, 50))),
+    a("packs_250", 1000, Some((Metric::Packs, 250))),
+    a("first_legendary", 200, None),
+    a("first_foil", 100, None),
+    a("legendary_foil", 1000, None),
+    a("first_tradeup", 100, None),
+    a("roulette_win", 200, None),
+    a("roulette_streak_3", 1000, Some((Metric::RouletteStreak, 3))),
+    a("first_trade", 150, Some((Metric::Trades, 1))),
+    a("trades_25", 750, Some((Metric::Trades, 25))),
+    a("streak_7", 300, Some((Metric::Streak, 7))),
+    a("streak_30", 1500, Some((Metric::Streak, 30))),
+    a("first_set", 250, Some((Metric::Sets, 1))),
+    a("sets_5", 1500, Some((Metric::Sets, 5))),
+    a("friends_5", 200, Some((Metric::Friends, 5))),
+    a("collector_500", 1000, Some((Metric::Cards, 500))),
+];
+
+pub fn achievement(id: &str) -> Option<&'static Achievement> {
+    ACHIEVEMENTS.iter().find(|a| a.id == id)
+}
+
+/// The player's value of a metric
+pub async fn metric(conn: &mut AsyncPgConnection, uid: i64, m: Metric) -> ApiResult<i64> {
+    Ok(match m {
+        Metric::Packs => users::table.find(uid).select(users::packs_opened).first::<i32>(conn).await? as i64,
+        Metric::RouletteStreak => {
+            users::table.find(uid).select(users::roulette_streak).first::<i32>(conn).await? as i64
+        }
+        Metric::Trades => {
+            trades::table
+                .filter(trades::state.eq("done"))
+                .filter(trades::from_id.eq(uid).or(trades::to_id.eq(uid)))
+                .count()
+                .get_result(conn)
+                .await?
+        }
+        Metric::Sets => {
+            achievements::table
+                .filter(achievements::user_id.eq(uid))
+                .filter(achievements::key.like("set:%"))
+                .count()
+                .get_result(conn)
+                .await?
+        }
+        Metric::Friends => {
+            friendships::table
+                .filter(friendships::accepted.eq(true))
+                .filter(friendships::requester_id.eq(uid).or(friendships::addressee_id.eq(uid)))
+                .count()
+                .get_result(conn)
+                .await?
+        }
+        Metric::Cards => {
+            owned_cards::table
+                .filter(owned_cards::user_id.eq(uid))
+                .select(diesel::dsl::count(owned_cards::card).aggregate_distinct())
+                .first(conn)
+                .await?
+        }
+        Metric::Streak => {
+            streaks::table.find(uid).select(streaks::best).first::<i32>(conn).await.optional()?.unwrap_or(0) as i64
+        }
+    })
+}
 
 /// Coins per card of the set, so bigger sets pay more
 pub const SET_REWARD_PER_CARD: i64 = 10;
@@ -48,6 +151,56 @@ pub async fn grant(conn: &mut AsyncPgConnection, uid: i64, key: &str, coins: i64
         Ok(new)
     })
     .await
+}
+
+/// Grants, then tells the player and everyone
+async fn unlock(
+    state: &AppState,
+    conn: &mut AsyncPgConnection,
+    uid: i64,
+    username: &str,
+    key: String,
+    coins: i64,
+    kind: &'static str,
+) -> ApiResult<Option<Unlock>> {
+    if !grant(conn, uid, &key, coins).await? {
+        return Ok(None);
+    }
+    crate::routes::notifications::achievement(state, conn, uid, &key).await?;
+    state.live.feat(crate::live::FeatEvent { user: username.to_owned(), key: key.clone(), at: Utc::now() });
+    state.metrics.achievement(kind);
+    Ok(Some(Unlock { key, coins }))
+}
+
+/// Awards these event achievements, and every goal on these metrics that is
+/// reached. Asking for one already earned does nothing.
+pub async fn award(
+    state: &AppState,
+    uid: i64,
+    username: &str,
+    events: &[&str],
+    metrics: &[Metric],
+) -> ApiResult<Vec<Unlock>> {
+    let mut unlocked = Vec::new();
+    if events.is_empty() && metrics.is_empty() {
+        return Ok(unlocked);
+    }
+    let mut conn = state.pool.get().await?;
+    for id in events {
+        let Some(a) = achievement(id).filter(|a| a.goal.is_none()) else { continue };
+        if let Some(u) = unlock(state, &mut conn, uid, username, a.id.to_owned(), a.coins, "achievement").await? {
+            unlocked.push(u);
+        }
+    }
+    for m in metrics {
+        let value = metric(&mut conn, uid, *m).await?;
+        for a in ACHIEVEMENTS.iter().filter(|a| matches!(a.goal, Some((g, n)) if g == *m && value >= n)) {
+            if let Some(u) = unlock(state, &mut conn, uid, username, a.id.to_owned(), a.coins, "achievement").await? {
+                unlocked.push(u);
+            }
+        }
+    }
+    Ok(unlocked)
 }
 
 /// What a player owns of a collection: distinct cards, and distinct foil cards
@@ -95,14 +248,15 @@ pub async fn cards_gained<'a>(
             earned.push((format!("foilset:{slug}"), foil_set_reward(col.cards.len())));
         }
         for (key, coins) in earned {
-            if grant(&mut conn, uid, &key, coins).await? {
-                crate::routes::notifications::achievement(state, &mut conn, uid, &key).await?;
-                state.live.feat(crate::live::FeatEvent { user: username.to_owned(), key: key.clone(), at: Utc::now() });
-                state.metrics.achievement(if key.starts_with("foilset:") { "foil_set" } else { "set" });
-                unlocked.push(Unlock { key, coins });
+            let kind = if key.starts_with("foilset:") { "foil_set" } else { "set" };
+            if let Some(u) = unlock(state, &mut conn, uid, username, key, coins, kind).await? {
+                unlocked.push(u);
             }
         }
     }
+    drop(conn);
+    // More cards, maybe a first or fifth set
+    unlocked.extend(award(state, uid, username, &[], &[Metric::Sets, Metric::Cards]).await?);
     Ok(unlocked)
 }
 
@@ -143,6 +297,15 @@ mod tests {
         // A foil copy counts for both
         assert_eq!(completion(&owned(&[("a", true), ("b", true), ("c", true)]), &set), (true, true));
         assert_eq!(completion(&[], &[]), (false, false), "an empty set is never complete");
+    }
+
+    #[test]
+    fn achievement_ids_are_unique_and_goals_positive() {
+        let ids: HashSet<&str> = ACHIEVEMENTS.iter().map(|a| a.id).collect();
+        assert_eq!(ids.len(), ACHIEVEMENTS.len());
+        assert!(ACHIEVEMENTS.iter().all(|a| a.goal.is_none_or(|(_, n)| n > 0) && a.coins >= 0));
+        // Ids never look like set keys
+        assert!(ACHIEVEMENTS.iter().all(|a| !a.id.contains(':')));
     }
 
     #[test]

@@ -15,6 +15,8 @@ diesel::table! {
         terms_accepted_at -> Nullable<Timestamptz>,
         free_packs_at -> Nullable<Timestamptz>,
         dry_packs -> Int4,
+        packs_opened -> Int4,
+        roulette_streak -> Int4,
     }
 }
 

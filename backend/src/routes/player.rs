@@ -265,7 +265,10 @@ pub async fn open_booster(
                 let dry: i32 = users::table.find(uid).select(users::dry_packs).for_no_key_update().first(conn).await?;
                 let drawn = game::draw_pack(&mut rand::rng(), &pool, dry + 1 >= game::PITY_PACKS);
                 let dry = if drawn.iter().any(|d| d.card.rarity == Rarity::Legendary) { 0 } else { dry + 1 };
-                diesel::update(users::table.find(uid)).set(users::dry_packs.eq(dry)).execute(conn).await?;
+                diesel::update(users::table.find(uid))
+                    .set((users::dry_packs.eq(dry), users::packs_opened.eq(users::packs_opened + 1)))
+                    .execute(conn)
+                    .await?;
 
                 let slugs: Vec<&str> = drawn.iter().map(|d| d.card.slug.as_str()).collect();
                 let before: HashMap<String, i64> = owned_cards::table
@@ -325,8 +328,20 @@ pub async fn open_booster(
             at: chrono::Utc::now(),
         });
     }
-    let unlocked =
+    let mut unlocked =
         crate::progress::cards_gained(&state, uid, &user.username, cards.iter().map(|c| c.card.as_str())).await?;
+    let mut events = Vec::new();
+    if cards.iter().any(|c| c.rarity == Rarity::Legendary) {
+        events.push("first_legendary");
+    }
+    if cards.iter().any(|c| c.foil.is_some()) {
+        events.push("first_foil");
+    }
+    if cards.iter().any(|c| c.rarity == Rarity::Legendary && c.foil.is_some()) {
+        events.push("legendary_foil");
+    }
+    use crate::progress::Metric;
+    unlocked.extend(crate::progress::award(&state, uid, &user.username, &events, &[Metric::Packs]).await?);
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "collection": collection, "cards": cards, "pile": pile, "pity_left": game::pity_left(dry),
         "unlocked": unlocked,
@@ -375,6 +390,7 @@ pub async fn claim_streak(state: web::Data<AppState>, user: CurrentUser) -> ApiR
         })
         .await?;
     state.metrics.earned("streak", reward);
+    crate::progress::award(&state, uid, &user.username, &[], &[crate::progress::Metric::Streak]).await?;
     let streak = streak_dto(&mut conn, uid).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "reward": reward, "coins": coins, "streak": streak })))
 }

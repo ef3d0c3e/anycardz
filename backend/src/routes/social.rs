@@ -317,6 +317,12 @@ pub async fn add_friend(
     if let Some(kind) = event {
         crate::routes::notifications::notify(&state, &mut conn, other, kind, uid, None).await?;
     }
+    if event == Some(crate::routes::notifications::Kind::FriendAccepted) {
+        use crate::progress::{Metric, award};
+        let (_, other_name) = by_name(&mut conn, &name).await?;
+        award(&state, uid, &user.username, &[], &[Metric::Friends]).await?;
+        award(&state, other, &other_name, &[], &[Metric::Friends]).await?;
+    }
     let rel = relation(&mut conn, uid, other).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "relation": rel })))
 }

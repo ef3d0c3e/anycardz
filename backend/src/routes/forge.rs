@@ -13,7 +13,7 @@ use crate::data::Rarity;
 use crate::error::{ApiError, ApiResult};
 use crate::game::{self, ROULETTE_MAX_BURN, TRADEUP_COST};
 use crate::inventory::{self, Copies};
-use crate::schema::owned_cards;
+use crate::schema::{owned_cards, users};
 
 #[derive(Deserialize)]
 pub struct TradeupBody {
@@ -90,7 +90,12 @@ pub async fn tradeup(
         at: chrono::Utc::now(),
     });
     state.metrics.card("tradeup", target, false);
-    let unlocked = crate::progress::cards_gained(&state, uid, &user.username, [won.as_str()]).await?;
+    let mut unlocked = crate::progress::cards_gained(&state, uid, &user.username, [won.as_str()]).await?;
+    let mut events = vec!["first_tradeup"];
+    if target == Rarity::Legendary {
+        events.push("first_legendary");
+    }
+    unlocked.extend(crate::progress::award(&state, uid, &user.username, &events, &[]).await?);
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "card": won, "rarity": target, "collection": rng_collection, "is_new": is_new, "copies": copies, "odds": odds,
         "unlocked": unlocked,
@@ -152,6 +157,12 @@ pub async fn roulette(
             }
             inventory::delete_copies(conn, &ids).await?;
         }
+        // Wins in a row, for the achievement
+        let me = diesel::update(users::table.find(uid));
+        match won {
+            Some(_) => me.set(users::roulette_streak.eq(users::roulette_streak + 1)).execute(conn).await?,
+            None => me.set(users::roulette_streak.eq(0)).execute(conn).await?,
+        };
         Ok(())
     })
     .await?;
@@ -169,10 +180,19 @@ pub async fn roulette(
             at: chrono::Utc::now(),
         });
     }
-    let unlocked = match won {
+    let mut unlocked = match won {
         Some(_) => crate::progress::cards_gained(&state, user.id, &user.username, [target.as_str()]).await?,
         None => Vec::new(),
     };
+    let mut events = Vec::new();
+    if won.is_some() {
+        events.extend(["roulette_win", "first_foil"]);
+        if target_rarity == Rarity::Legendary {
+            events.push("legendary_foil");
+        }
+    }
+    use crate::progress::Metric;
+    unlocked.extend(crate::progress::award(&state, user.id, &user.username, &events, &[Metric::RouletteStreak]).await?);
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "won": won.is_some(), "foil": won, "chance": chance, "burned": burned.len(), "unlocked": unlocked,
     })))

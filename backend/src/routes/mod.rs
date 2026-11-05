@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, get, web};
 use crate::auth;
 
 pub mod account;
+pub mod achievements;
 pub mod catalog;
 pub mod forge;
 pub mod legal;
@@ -78,6 +79,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(notifications::list)
             .service(notifications::mark_read)
             .service(search::search)
+            .service(achievements::list)
+            .service(achievements::leaderboard)
             .service(trades::open_trade)
             .service(trades::list_trades)
             .service(trades::get_trade)
