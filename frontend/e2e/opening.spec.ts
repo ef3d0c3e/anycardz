@@ -15,7 +15,9 @@ for (const mode of ['one', 'all'] as const) {
 			await tearPack(page);
 			await page.locator('.arena').click();
 			await expect(page.locator('.reel.landed').first()).toBeVisible({ timeout: 1500 });
-			await page.getByRole('button', { name: /skip/i }).click();
+			// All at once, the tap may already have finished the pack: Skip is gone then
+			const skip = page.getByRole('button', { name: /skip/i });
+			if (await skip.isVisible()) await skip.click({ timeout: 1000 }).catch(() => {});
 			await page.locator('.after').waitFor();
 
 			await page.locator('.after .btn.primary').click();

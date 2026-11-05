@@ -77,3 +77,26 @@ test('the rarity tell glows without a second border', async ({ page }) => {
 		expect(shadow, tell).not.toMatch(/0px 0px 0px \d/);
 	}
 });
+
+// The bell and search pushed the account button off narrow phone screens
+for (const width of [360, 390]) {
+	test(`every top bar control fits at ${width} px`, async ({ page }) => {
+		await page.setViewportSize({ width, height: 800 });
+		await newPlayer(page);
+		await visit(page, '/');
+		const controls = page.locator('.top').getByRole('button');
+		expect(await controls.count()).toBeGreaterThanOrEqual(5);
+		for (const control of await controls.all()) {
+			if (!(await control.isVisible())) continue;
+			const box = (await control.boundingBox())!;
+			expect(box.x, (await control.getAttribute('aria-label')) ?? '').toBeGreaterThanOrEqual(0);
+			expect(
+				box.x + box.width,
+				(await control.getAttribute('aria-label')) ?? ''
+			).toBeLessThanOrEqual(width);
+		}
+		expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+			width
+		);
+	});
+}
