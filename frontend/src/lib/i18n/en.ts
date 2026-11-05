@@ -630,5 +630,22 @@ export default {
 	'errors.roulette_foil': 'Foil cards cannot be burned.',
 	'errors.unknown_listing': 'This listing is no longer open.',
 	'ach.first_sale': 'Open for business',
-	'ach.first_sale.desc': 'Sell a card on the market.'
+	'ach.first_sale.desc': 'Sell a card on the market.',
+
+	'settings.push.title': 'Notifications on this device',
+	'settings.push.lead':
+		'Trades, friend requests, sales and rewards reach this device while AnyCardz is closed.',
+	'settings.push.on': 'Turn on',
+	'settings.push.off': 'Turn off',
+	'settings.push.state_on': 'On for this device.',
+	'settings.push.state_off': 'Off for this device.',
+	'settings.push.unsupported': 'This browser cannot receive push notifications.',
+	'settings.push.ios':
+		'On iPhone and iPad, add AnyCardz to your home screen first (Share, then Add to Home Screen), and open it from there.',
+	'settings.push.off_server': 'Push notifications are not set up on this server.',
+	'settings.push.blocked':
+		'Notifications are blocked for this site. Allow them in your browser settings, then come back.',
+	'errors.push_disabled': 'Push notifications are not set up on this server.',
+	'errors.push_endpoint': 'This browser’s push service is not supported.',
+	'errors.push_keys': 'The browser sent an unreadable subscription. Try again.'
 } as const;

@@ -6,6 +6,7 @@
 	import { api, post } from '#lib/api.ts';
 	import { ago } from '#lib/live.svelte.ts';
 	import { deviceName } from '#lib/device.ts';
+	import PushSettings from '#lib/components/PushSettings.svelte';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
@@ -149,6 +150,8 @@
 			>
 		</form>
 	</section>
+
+	<PushSettings />
 
 	<section class="panel" aria-labelledby="sessions-title">
 		<h2 id="sessions-title">{i18n.t('settings.sessions.title')}</h2>

@@ -99,7 +99,7 @@ const en: { terms: Doc; privacy: Doc; operator: string; contact: string } = {
 					'Your account: username, email address, password (as a one-way hash we cannot read back), coins, and when you accepted the terms.',
 					'Your game: cards and when you got them, unopened boosters, daily streak, coin packs claimed, trades, forge results as they change your cards.',
 					'What you share: bio, avatar, shoutbox messages, friends and blocked players.',
-					'Your sessions: for each device you are logged in on, its browser name (user agent), when you logged in and when it was last used.',
+					'Your sessions: for each device you are logged in on, its browser name (user agent), when you logged in and when it was last used. If you turn on notifications for a device, the address its browser gave for them and the keys to encrypt them, until you turn them off or log that device out.',
 					'Notifications sent to you, and whether you read them.'
 				]
 			},
@@ -219,7 +219,7 @@ const fr: typeof en = {
 					'Votre compte : pseudo, adresse e-mail, mot de passe (sous forme d’empreinte à sens unique, illisible pour nous), pièces, et la date d’acceptation des conditions.',
 					'Votre jeu : cartes et date d’obtention, boosters non ouverts, série quotidienne, succès, lots de pièces obtenus, échanges, résultats de la forge quand ils modifient vos cartes.',
 					'Ce que vous partagez : bio, avatar, messages de la discussion, amis et joueurs bloqués.',
-					'Vos sessions : pour chaque appareil connecté, le nom de son navigateur (user agent), la date de connexion et de dernière utilisation.',
+					'Vos sessions : pour chaque appareil connecté, le nom de son navigateur (user agent), la date de connexion et de dernière utilisation. Si vous activez les notifications sur un appareil, l’adresse fournie par son navigateur pour les recevoir et les clés pour les chiffrer, jusqu’à ce que vous les désactiviez ou déconnectiez cet appareil.',
 					'Les notifications qui vous sont envoyées, et si vous les avez lues.'
 				]
 			},

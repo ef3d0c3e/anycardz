@@ -637,6 +637,23 @@ const fr: Partial<Record<Key, string>> = {
 	'errors.roulette_foil': 'Les cartes brillantes ne peuvent pas être brûlées.',
 	'errors.unknown_listing': 'Cette vente n’est plus ouverte.',
 	'ach.first_sale': 'Boutique ouverte',
-	'ach.first_sale.desc': 'Vends une carte sur le marché.'
+	'ach.first_sale.desc': 'Vends une carte sur le marché.',
+
+	'settings.push.title': 'Notifications sur cet appareil',
+	'settings.push.lead':
+		'Échanges, demandes d’ami, ventes et récompenses arrivent sur cet appareil quand AnyCardz est fermé.',
+	'settings.push.on': 'Activer',
+	'settings.push.off': 'Désactiver',
+	'settings.push.state_on': 'Activées sur cet appareil.',
+	'settings.push.state_off': 'Désactivées sur cet appareil.',
+	'settings.push.unsupported': 'Ce navigateur ne peut pas recevoir de notifications.',
+	'settings.push.ios':
+		'Sur iPhone et iPad, ajoute d’abord AnyCardz à l’écran d’accueil (Partager, puis Sur l’écran d’accueil) et ouvre-le depuis là.',
+	'settings.push.off_server': 'Les notifications ne sont pas configurées sur ce serveur.',
+	'settings.push.blocked':
+		'Les notifications sont bloquées pour ce site. Autorise-les dans les réglages du navigateur, puis reviens ici.',
+	'errors.push_disabled': 'Les notifications ne sont pas configurées sur ce serveur.',
+	'errors.push_endpoint': 'Le service de notifications de ce navigateur n’est pas pris en charge.',
+	'errors.push_keys': 'Le navigateur a envoyé un abonnement illisible. Réessaie.'
 };
 export default fr;
