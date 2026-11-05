@@ -10,6 +10,23 @@ use crate::data::{Card, Rarity};
 pub const STARTING_COINS: i64 = 1000;
 pub const BOOSTER_PRICE: i64 = 250;
 pub const PACK_SIZE: usize = 5;
+
+/// The pile entry of a free pack: it draws from every collection, and no
+/// collection has this slug, so it can never be bought
+pub const FREE_PACK: &str = "*";
+/// Free packs handed out per claim, and the wait between claims
+pub const FREE_PACKS: i64 = 3;
+pub const FREE_PACK_HOURS: i64 = 12;
+
+/// A pack opened after this many in a row without a legendary holds one for
+/// sure. A pack has a legendary 23% of the time (1 - 0.95^5): 14 dry packs in
+/// a row happen to about 2% of players.
+pub const PITY_PACKS: i32 = 15;
+
+/// Packs to open before the guaranteed legendary, this one included
+pub fn pity_left(dry_packs: i32) -> i32 {
+    (PITY_PACKS - dry_packs).max(1)
+}
 /// Drop weights out of 100
 pub const WEIGHT_COMMON: u32 = 80;
 pub const WEIGHT_RARE: u32 = 15;
@@ -62,9 +79,10 @@ pub struct Drawn<'a> {
 }
 
 /// Draws a pack from a collection's pool. A rarity the collection lacks falls
-/// back to the closest one below, then above. Sorted best-last, so the reveal
-/// builds up instead of front-loading the hit.
-pub fn draw_pack<'a>(rng: &mut impl Rng, pool: &HashMap<Rarity, Vec<&'a Card>>) -> Vec<Drawn<'a>> {
+/// back to the closest one below, then above. With `pity`, a pack without a
+/// legendary gets one in place of its weakest card (when the pool has any).
+/// Sorted best-last, so the reveal builds up instead of front-loading the hit.
+pub fn draw_pack<'a>(rng: &mut impl Rng, pool: &HashMap<Rarity, Vec<&'a Card>>, pity: bool) -> Vec<Drawn<'a>> {
     let mut pack: Vec<Drawn> = (0..PACK_SIZE)
         .filter_map(|_| {
             let wanted = roll_rarity(rng);
@@ -75,6 +93,13 @@ pub fn draw_pack<'a>(rng: &mut impl Rng, pool: &HashMap<Rarity, Vec<&'a Card>>) 
         })
         .collect();
     pack.sort_by_key(|d| (d.card.rarity, d.foil.is_some()));
+    let has_legendary = pack.iter().any(|d| d.card.rarity == Rarity::Legendary);
+    let legendaries = pool.get(&Rarity::Legendary).filter(|c| !c.is_empty());
+    if let (true, false, Some(legendaries)) = (pity, has_legendary, legendaries) {
+        // Sorted: the first card is the weakest
+        pack[0].card = legendaries[rng.random_range(0..legendaries.len())];
+        pack.sort_by_key(|d| (d.card.rarity, d.foil.is_some()));
+    }
     pack
 }
 
@@ -197,7 +222,7 @@ mod tests {
         let pool = cat.pool(cat.collection("minerals").unwrap());
         let mut rng = StdRng::seed_from_u64(3);
         for _ in 0..500 {
-            let pack = draw_pack(&mut rng, &pool);
+            let pack = draw_pack(&mut rng, &pool, false);
             assert_eq!(pack.len(), PACK_SIZE);
             assert!(
                 pack.windows(2)
@@ -213,8 +238,44 @@ mod tests {
         pool.remove(&Rarity::Legendary);
         pool.remove(&Rarity::Rare);
         let mut rng = StdRng::seed_from_u64(4);
-        let pack = draw_pack(&mut rng, &pool);
+        let pack = draw_pack(&mut rng, &pool, false);
         assert!(pack.iter().all(|d| d.card.rarity == Rarity::Common));
+        // Pity has nothing to give from a pool without legendaries
+        let pack = draw_pack(&mut rng, &pool, true);
+        assert!(pack.iter().all(|d| d.card.rarity == Rarity::Common));
+    }
+
+    #[test]
+    fn pity_packs_always_hold_a_legendary() {
+        let cat = Catalog::load(&crate::test_support::fixture_dir(), false).unwrap();
+        let pool = cat.pool(cat.collection("minerals").unwrap());
+        let mut rng = StdRng::seed_from_u64(5);
+        for _ in 0..2000 {
+            let pack = draw_pack(&mut rng, &pool, true);
+            assert_eq!(pack.len(), PACK_SIZE);
+            let legendaries = pack.iter().filter(|d| d.card.rarity == Rarity::Legendary).count();
+            assert!(legendaries >= 1);
+            // Only the weakest card is swapped: a pack that had one keeps its count
+            assert_eq!(pack.last().unwrap().card.rarity, Rarity::Legendary, "still best-last");
+        }
+    }
+
+    #[test]
+    fn pity_countdown() {
+        assert_eq!(pity_left(0), PITY_PACKS);
+        assert_eq!(pity_left(PITY_PACKS - 1), 1, "the next pack is the guaranteed one");
+        assert_eq!(pity_left(PITY_PACKS + 3), 1);
+    }
+
+    #[test]
+    fn the_free_pack_pool_spans_every_collection() {
+        // With the dev collection: two to span
+        let cat = Catalog::load(&crate::test_support::fixture_dir(), true).unwrap();
+        let all = cat.pool_all();
+        let total: usize = all.values().map(Vec::len).sum();
+        let per: usize = cat.collections.iter().map(|c| c.cards.len()).sum();
+        assert_eq!(total, per);
+        assert!(cat.collections.len() > 1);
     }
 
     #[test]

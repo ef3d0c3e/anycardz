@@ -13,6 +13,8 @@ diesel::table! {
         avatar_version -> Int4,
         terms_version -> Nullable<Int4>,
         terms_accepted_at -> Nullable<Timestamptz>,
+        free_packs_at -> Nullable<Timestamptz>,
+        dry_packs -> Int4,
     }
 }
 

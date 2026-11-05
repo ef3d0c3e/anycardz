@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use actix_web::{HttpResponse, get, post, web};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
@@ -74,6 +74,54 @@ struct MeDto {
     streak: StreakDto,
     /// The player has not accepted the current terms yet
     terms_outdated: bool,
+    free_packs: FreePacksDto,
+    /// Packs to open before a legendary is guaranteed, the next one included
+    pity_left: i32,
+}
+
+#[derive(Serialize)]
+struct FreePacksDto {
+    /// Claimable now
+    ready: bool,
+    /// When they are, if not now
+    next_at: Option<DateTime<Utc>>,
+    count: i64,
+    every_hours: i64,
+}
+
+fn free_packs_dto(last: Option<DateTime<Utc>>) -> FreePacksDto {
+    let next = last.map(|t| t + chrono::Duration::hours(game::FREE_PACK_HOURS)).filter(|t| *t > Utc::now());
+    FreePacksDto { ready: next.is_none(), next_at: next, count: game::FREE_PACKS, every_hours: game::FREE_PACK_HOURS }
+}
+
+/// Three packs from every collection, twice a day
+#[post("/free-packs/claim")]
+pub async fn claim_free_packs(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<HttpResponse> {
+    let mut conn = state.pool.get().await?;
+    let uid = user.id;
+    let (at, pile) = conn
+        .transaction::<_, ApiError, _>(async move |conn| {
+            let now = Utc::now();
+            // The check and the stamp are one statement: a double tap claims once
+            let since = now - chrono::Duration::hours(game::FREE_PACK_HOURS);
+            let claimed = diesel::update(
+                users::table.find(uid).filter(users::free_packs_at.is_null().or(users::free_packs_at.le(since))),
+            )
+            .set(users::free_packs_at.eq(now))
+            .execute(conn)
+            .await?;
+            if claimed == 0 {
+                return Err(ApiError::Conflict("free_packs_not_ready"));
+            }
+            let rows: Vec<_> = (0..game::FREE_PACKS)
+                .map(|_| (boosters::user_id.eq(uid), boosters::collection.eq(game::FREE_PACK)))
+                .collect();
+            diesel::insert_into(boosters::table).values(rows).execute(conn).await?;
+            Ok((now, pile(conn, uid).await?))
+        })
+        .await?;
+    state.metrics.free_packs();
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "pile": pile, "free_packs": free_packs_dto(Some(at)) })))
 }
 
 #[get("/me")]
@@ -81,9 +129,16 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
     let mut conn = state.pool.get().await?;
     let pile = pile(&mut conn, user.id).await?;
     let streak = streak_dto(&mut conn, user.id).await?;
-    let (version, has_avatar, terms): (i32, bool, Option<i32>) = users::table
+    #[allow(clippy::type_complexity)]
+    let (version, has_avatar, terms, free_at, dry): (i32, bool, Option<i32>, Option<DateTime<Utc>>, i32) = users::table
         .find(user.id)
-        .select((users::avatar_version, users::avatar.is_not_null(), users::terms_version))
+        .select((
+            users::avatar_version,
+            users::avatar.is_not_null(),
+            users::terms_version,
+            users::free_packs_at,
+            users::dry_packs,
+        ))
         .first(&mut conn)
         .await?;
     let avatar = crate::routes::social::avatar_url(&user.username, version, has_avatar);
@@ -99,6 +154,8 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         friend_requests,
         notifications: crate::routes::notifications::unread(&mut conn, user.id).await?,
         terms_outdated: terms != Some(crate::routes::legal::TERMS_VERSION),
+        free_packs: free_packs_dto(free_at),
+        pity_left: game::pity_left(dry),
         username: user.username,
         email: user.email,
         coins: user.coins,
@@ -197,11 +254,18 @@ pub async fn open_booster(
                 let (booster_id, collection) = found.ok_or(ApiError::Conflict("no_booster"))?;
                 diesel::delete(boosters::table.find(booster_id)).execute(conn).await?;
 
-                let col = catalog
-                    .collection(&collection)
-                    .ok_or(ApiError::Internal(anyhow::anyhow!("booster of unknown collection {collection}")))?;
-                let pool = catalog.pool(col);
-                let drawn = game::draw_pack(&mut rand::rng(), &pool);
+                let pool = if collection == game::FREE_PACK {
+                    catalog.pool_all()
+                } else {
+                    let col = catalog
+                        .collection(&collection)
+                        .ok_or(ApiError::Internal(anyhow::anyhow!("booster of unknown collection {collection}")))?;
+                    catalog.pool(col)
+                };
+                let dry: i32 = users::table.find(uid).select(users::dry_packs).for_no_key_update().first(conn).await?;
+                let drawn = game::draw_pack(&mut rand::rng(), &pool, dry + 1 >= game::PITY_PACKS);
+                let dry = if drawn.iter().any(|d| d.card.rarity == Rarity::Legendary) { 0 } else { dry + 1 };
+                diesel::update(users::table.find(uid)).set(users::dry_packs.eq(dry)).execute(conn).await?;
 
                 let slugs: Vec<&str> = drawn.iter().map(|d| d.card.slug.as_str()).collect();
                 let before: HashMap<String, i64> = owned_cards::table
@@ -242,12 +306,12 @@ pub async fn open_booster(
                         }
                     })
                     .collect();
-                Ok((collection, cards, pile(conn, uid).await?))
+                Ok((collection, cards, pile(conn, uid).await?, dry))
             }
         })
         .await?;
-    let (collection, cards, pile) = result;
-    state.metrics.booster_opened(&collection);
+    let (collection, cards, pile, dry) = result;
+    state.metrics.booster_opened(if collection == game::FREE_PACK { "free" } else { &collection });
     for c in &cards {
         state.metrics.card("pack", c.rarity, c.foil.is_some());
     }
@@ -261,7 +325,9 @@ pub async fn open_booster(
             at: chrono::Utc::now(),
         });
     }
-    Ok(HttpResponse::Ok().json(serde_json::json!({ "collection": collection, "cards": cards, "pile": pile })))
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "collection": collection, "cards": cards, "pile": pile, "pity_left": game::pity_left(dry),
+    })))
 }
 
 #[post("/streak/claim")]

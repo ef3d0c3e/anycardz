@@ -57,6 +57,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(shop::topup)
             .service(player::open_booster)
             .service(player::claim_streak)
+            .service(player::claim_free_packs)
             .service(player::get_binder)
             .service(player::sell_card)
             .service(forge::tradeup)

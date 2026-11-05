@@ -104,6 +104,18 @@ impl Catalog {
         pool
     }
 
+    /// Every card of every loaded collection, for free packs
+    pub fn pool_all(&self) -> HashMap<Rarity, Vec<&Card>> {
+        let mut pool: HashMap<Rarity, Vec<&Card>> = HashMap::new();
+        for collection in &self.collections {
+            for slug in &collection.cards {
+                let card = &self.cards[slug];
+                pool.entry(card.rarity).or_default().push(card);
+            }
+        }
+        pool
+    }
+
     /// Loads the whole data directory. Any broken file fails the load: better no
     /// server than cards that vanish from players' binders.
     pub fn load(dir: &Path, dev_collections: bool) -> anyhow::Result<Catalog> {

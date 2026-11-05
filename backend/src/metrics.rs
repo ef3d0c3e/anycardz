@@ -91,6 +91,7 @@ pub struct Metrics {
     trades: Family<ResultLabels, Counter>,
     auth: Family<AuthLabels, Counter>,
     shouts: Counter,
+    free_packs: Counter,
     sockets: Gauge,
     online: Gauge,
     users: Gauge,
@@ -122,6 +123,7 @@ impl Default for Metrics {
             trades: Default::default(),
             auth: Default::default(),
             shouts: Default::default(),
+            free_packs: Default::default(),
             sockets: Default::default(),
             online: Default::default(),
             users: Default::default(),
@@ -140,6 +142,7 @@ impl Default for Metrics {
         r.register("trades", "Trades ended, by result (done, cancelled)", m.trades.clone());
         r.register("auth_attempts", "Logins and sign-ups, by result", m.auth.clone());
         r.register("shouts", "Shoutbox messages posted", m.shouts.clone());
+        r.register("free_pack_claims", "Free pack claims (each gives several packs)", m.free_packs.clone());
         r.register("live_sockets", "Open live sockets", m.sockets.clone());
         r.register("online_users", "Players with a live socket open", m.online.clone());
         r.register("users", "Registered accounts", m.users.clone());
@@ -189,6 +192,10 @@ impl Metrics {
 
     pub fn shout(&self) {
         self.shouts.inc();
+    }
+
+    pub fn free_packs(&self) {
+        self.free_packs.inc();
     }
 
     fn http(&self, method: &str, route: &str, status: u16, seconds: Option<f64>) {
