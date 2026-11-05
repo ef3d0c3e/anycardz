@@ -238,12 +238,15 @@ pub async fn login(
     let wait = [limits.login_account.wait(&login), limits.login_ip.wait(&ip)].into_iter().flatten().max();
     if let Some(wait) = wait {
         state.metrics.auth("login", "limited");
+        tracing::warn!(client = %ip, "login rate limited");
         return Err(ApiError::RetryAfter(wait));
     }
     let failed = || {
         limits.login_account.hit(&login);
         limits.login_ip.hit(&ip);
         state.metrics.auth("login", "failed");
+        // The address the limits count: behind a proxy, check it is the player's
+        tracing::info!(client = %ip, "login failed");
         ApiError::Invalid("invalid_credentials")
     };
     let mut conn = state.pool.get().await?;
