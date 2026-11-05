@@ -5,6 +5,10 @@
 		reverse_proxy api:8080
 	}
 	handle {
+		# Unversioned static files: reused for a week (the app's own chunks are
+		# hashed and already immutable; the service worker stays uncached)
+		@static path /favicon.ico /icons/* /robots.txt /manifest.webmanifest
+		header @static Cache-Control "public, max-age=604800"
 		reverse_proxy web:3000
 	}
 }
