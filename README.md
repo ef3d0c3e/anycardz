@@ -103,6 +103,9 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | POST   | `/shop/topup`            | yes  | `{pack}`, grants the coins at once (demo, logged in `topups`) |
 | POST   | `/pile/open`             | yes  | `{collection?}`, opens a booster: 5 cards         |
 | POST   | `/streak/claim`          | yes  | Daily bonus                                       |
+| POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 12 h; `/me.free_packs` says when |
+| GET    | `/achievements`          | yes  | Every achievement with the player's progress and when it was earned |
+| GET    | `/leaderboards?board=&period=` | yes | `board`: sets, achievements, legendaries, foils, trades, streak; `period`: week or all (streak: all). Top 20 and the caller's rank |
 | GET    | `/binder`                | yes  | Owned cards and completion per collection         |
 | POST   | `/binder/sell`           | yes  | `{card, foil}`, sells one copy                    |
 | GET    | `/binder?details=1`      | yes  | Same, plus each owned card's details              |
