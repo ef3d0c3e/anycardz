@@ -11,8 +11,8 @@ test('a trade-up turns ten spare commons into a rare', async ({ page }) => {
 	await page.getByRole('button', { name: /fill from biggest stacks/i }).click();
 	await expect(page.locator('.core-in b')).toHaveText('10/10');
 	await expect(page.locator('.odds li')).toContainText('100%');
-	// Fill took the 10 duplicates; the 11th copy stays, marked as the last one in place of its count
-	await expect(page.locator('.tray .c-badge')).toHaveCount(1);
+	// Fill took the 10 duplicates; the 11th copy stays, marked as the last one
+	await expect(page.locator('.tray .c-badge').first()).toHaveText('×1');
 	await expect(page.locator('.tray .c-badge.last')).toHaveText('Last copy');
 
 	await hold(page, page.locator('.fuse'), 1800);

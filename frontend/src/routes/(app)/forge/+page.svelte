@@ -536,10 +536,11 @@
 						foil={f.plain < 1 && f.foil > 0 ? foilOf(owned[c.slug], usedTU(c.slug, true)) : null}
 					>
 						{#snippet badge()}
+							<span class="c-badge">×{left}</span>
 							{#if left === 1}<span class="c-badge last">{i18n.t('forge.last_copy')}</span>
-							{:else}<span class="c-badge">×{left}</span>{#if f.plain < 1 && f.foil > 0}<span
-										class="c-badge foilb">{i18n.t('card.foil')}</span
-									>{/if}{/if}
+							{:else if f.plain < 1 && f.foil > 0}<span class="c-badge foilb"
+									>{i18n.t('card.foil')}</span
+								>{/if}
 						{/snippet}
 					</Card>
 				</button>
@@ -709,10 +710,10 @@
 					>
 						{#snippet badge()}
 							{#if !picking}
+								<span class="c-badge">×{leftRO(c.slug)}</span>
 								{#if lastCopy(c.slug)}<span class="c-badge last">{i18n.t('forge.last_copy')}</span>
-								{:else}<span class="c-badge">×{leftRO(c.slug)}</span>{#if nextIsFoil(c.slug)}<span
-											class="c-badge foilb">{i18n.t('card.foil')}</span
-										>{/if}{/if}
+								{:else if nextIsFoil(c.slug)}<span class="c-badge foilb">{i18n.t('card.foil')}</span
+									>{/if}
 							{/if}
 						{/snippet}
 					</Card>
@@ -1041,8 +1042,11 @@
 		border-radius: 50%;
 		flex: none;
 	}
-	/* In place of the count, which it implies: the rarity at the bottom stays readable */
 	.tray :global(.c-badge.last) {
+		top: auto;
+		bottom: -6px;
+		right: 50%;
+		translate: 50% 0;
 		white-space: nowrap;
 		background: var(--warn);
 		color: #1b1200;
@@ -1069,6 +1073,20 @@
 		padding: 0;
 		display: block;
 		transition: transform 0.2s;
+	}
+	/* The rarity as a frame: the last copy label covers the line that names it */
+	.tray :global(.card) {
+		border-radius: 6.5%/4.7%;
+		box-shadow: 0 0 0 2px var(--rc, var(--common));
+	}
+	.tray :global(.card.r-common) {
+		--rc: var(--common);
+	}
+	.tray :global(.card.r-rare) {
+		--rc: var(--rare);
+	}
+	.tray :global(.card.r-legendary) {
+		--rc: var(--legend);
 	}
 	.tcard:hover {
 		transform: translateY(-4px);
