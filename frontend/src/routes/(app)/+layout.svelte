@@ -35,15 +35,14 @@
 	const toasts = getToasts();
 	// Several notifications can land together: only the latest answer counts
 	let meCalls = 0;
-	function refreshMe(withPile: boolean) {
+	function refreshMe() {
 		const call = ++meCalls;
 		api<MeDto>('/me')
 			.then((me) => {
 				if (call !== meCalls) return;
 				session.coins = me.coins;
 				session.missions = me.missions;
-				// Only the mission bonus adds a pack; the open page keeps the pile otherwise
-				if (withPile) session.pile = me.pile;
+				session.pile = me.pile;
 			})
 			.catch(() => {});
 	}
@@ -57,7 +56,7 @@
 			toasts.show(notifText(i18n, catalog, n));
 			// Achievements, sales and missions pay (a mission bonus is a pack): refresh
 			if (n.kind === 'achievement' || n.kind === 'market_sold' || n.kind === 'mission') {
-				refreshMe(n.kind === 'mission');
+				refreshMe();
 			}
 			if (n.kind === 'market_sold') invalidate('app:market');
 		});
