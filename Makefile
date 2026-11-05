@@ -39,7 +39,9 @@ fmt:
 	cd frontend && npx prettier --write src e2e
 
 # Production (compose.prod.yaml); needs .env.prod, see .env.prod.example
-PROD = docker compose -f compose.prod.yaml --env-file .env.prod
+# Behind nginx: make prod-up PROD_FILES="-f compose.prod.yaml -f deploy/compose.nginx.yaml"
+PROD_FILES ?= -f compose.prod.yaml
+PROD = docker compose $(PROD_FILES) --env-file .env.prod
 
 prod-up:
 	$(PROD) up -d --build

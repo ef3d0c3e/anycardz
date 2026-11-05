@@ -1,4 +1,7 @@
 # Development services. The API and the frontend run on the host (make dev).
+# A project of its own: on a machine that also runs production (project
+# "anycardz"), this file can never replace its containers.
+name: anycardz-dev
 services:
   db:
     image: postgres:17-alpine
