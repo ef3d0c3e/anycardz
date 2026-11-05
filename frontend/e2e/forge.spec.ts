@@ -51,7 +51,10 @@ test('the roulette shows its odds, then wins a foil or destroys the card', async
 	await expect(page.locator('.math')).toContainText('5.5%');
 	await expect(page.locator('.math')).toContainText('+ 1 burned');
 
+	await page.locator('.spin').scrollIntoViewIfNeeded();
 	await hold(page, page.locator('.spin'), 1100);
+	// Phones: the dial comes back on screen for the spin
+	await expect(page.locator('.dial-wrap')).toBeInViewport({ ratio: 0.9 });
 	const banner = page.getByRole('status');
 	await expect(banner).toBeVisible({ timeout: 8000 });
 	const text = await banner.textContent();

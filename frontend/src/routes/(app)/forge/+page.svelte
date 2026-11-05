@@ -290,10 +290,24 @@
 		burn.push({ slug, foil: f.plain < 1 });
 		tone(250, 0.08, 'sawtooth', 0.03);
 	}
+	/** Whether the whole dial is on screen, below the header */
+	function dialInView() {
+		if (!dial) return true;
+		const r = dial.getBoundingClientRect();
+		const top = document.querySelector('header.top')?.getBoundingClientRect().bottom ?? 0;
+		// The bottom tab bar on phones covers the end of the screen
+		const bar = document.querySelector('nav.nav')?.getBoundingClientRect();
+		const bottom = bar && bar.top > window.innerHeight / 2 ? bar.top : window.innerHeight;
+		return r.top >= top && r.bottom <= bottom;
+	}
 	async function spin() {
 		if (!rTarget || spinning) return;
 		spinning = true;
 		outcome = null;
+		// Phones: the button sits below the dial; bring the dial back in view to watch the spin
+		const shown = dialInView();
+		if (!shown)
+			dial?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
 		const slug = rTarget;
 		const spent = [...burn];
 		let res: { won: boolean; chance: number; foil: string | null };
@@ -304,6 +318,8 @@
 			toasts.show(i18n.error(e), 'warn');
 			return;
 		}
+		// Let the scroll land before the needle moves
+		if (!shown && !reducedMotion()) await sleep(450);
 		// The server decided: the needle only shows it
 		spinMs = reducedMotion() ? 10 : 4200;
 		rot = Math.ceil(rot / 360) * 360 + 360 * 5 + needleAngle(res.won, res.chance);
