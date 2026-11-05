@@ -15,6 +15,7 @@
 	import Card from '#lib/components/Card.svelte';
 	import Pack from '#lib/components/Pack.svelte';
 	import { getLive } from '#lib/live.svelte.ts';
+	import ScratchCard from '#lib/components/ScratchCard.svelte';
 	import { brag } from '#lib/brag.ts';
 	import { playPack, ReelRun, type Mode } from '#lib/opening/reels.ts';
 
@@ -88,8 +89,13 @@
 			/* no remembered mode */
 		}
 		setup();
+		// Phones: the pack summary sits at the bottom, toasts go to the top here
+		toasts.placement = 'top';
 		// Leaving mid-pack: nothing stays held
-		return () => live.release();
+		return () => {
+			live.release();
+			toasts.placement = 'bottom';
+		};
 	});
 
 	const pickMode = (): Mode => userMode ?? (felt.clientWidth >= 940 ? 'all' : 'one');
@@ -107,7 +113,25 @@
 		geo = { rw, rh, cell: rh + GAP, peek: Math.round(rh * PEEK) };
 	}
 
+	// Scratch tickets come first; "Later" sends the player to the packs for this visit
+	let ticketTurn = $state(false);
+	let ticketKey = $state(0);
+	let ticketsLater = false;
+	function nextTicket() {
+		if (session.tickets.count > 0) ticketKey++;
+		else {
+			ticketTurn = false;
+			setup();
+		}
+	}
+	function toPacks() {
+		ticketsLater = true;
+		ticketTurn = false;
+		setup();
+	}
+
 	function setup() {
+		ticketTurn = !ticketsLater && session.tickets.count > 0;
 		pulled = [];
 		reels = [];
 		torn = false;
@@ -381,176 +405,184 @@
 	style:--peek="{geo.peek}px"
 	style:--gap="{GAP}px"
 >
-	<div class="open-head">
-		<div>
-			{#if collection}
-				<p class="eyebrow">
-					{i18n.t('open.pile_count', { n: session.pile.length + (phase === 'sealed' ? 0 : 1) })}
-				</p>
-				<h1>{collection.title}</h1>
-				<p class="pity" title={i18n.t('pity.hint')}>
-					{i18n.t('pity.left', { n: session.pityLeft })}
-				</p>
-			{/if}
-		</div>
-		<div class="open-ctrls">
-			<div class="seg" role="group" aria-label={i18n.t('open.mode')}>
-				<button
-					type="button"
-					aria-pressed={(userMode ?? mode) === 'one'}
-					onclick={() => chooseMode('one')}>{i18n.t('open.one_by_one')}</button
-				>
-				<button
-					type="button"
-					aria-pressed={(userMode ?? mode) === 'all'}
-					onclick={() => chooseMode('all')}>{i18n.t('open.all_at_once')}</button
-				>
-			</div>
-			{#if phase === 'spinning' || phase === 'landed'}
-				<button type="button" class="ghost-btn" onclick={skip}>{i18n.t('open.skip')}</button>
-			{/if}
-		</div>
-	</div>
-
-	{#if phase === 'empty'}
-		<div class="empty">
-			<h2>{i18n.t('open.empty_title')}</h2>
-			<p>{i18n.t('open.empty_hint')}</p>
-			<a class="btn" href="/">{i18n.t('open.go_lobby')}</a>
-		</div>
+	{#if ticketTurn}
+		{#key ticketKey}
+			<ScratchCard onNext={nextTicket} onLater={toPacks} />
+		{/key}
 	{:else}
-		<div
-			class="arena"
-			bind:this={arena}
-			tabindex="0"
-			role="button"
-			aria-label={i18n.t('open.arena')}
-			onpointerdown={nudge}
-			onkeydown={key}
-		>
-			{#if collection && (phase === 'sealed' || (phase === 'busy' && !reels.length))}
-				<div class="tear-wrap tilt" use:tilt>
-					<div class="tear-pack" class:torn class:started={tearStarted} style:--t={tear}>
-						<div class="tp-body"><Pack {collection} /></div>
-						<div class="tp-flap"><Pack {collection} /></div>
-						<div
-							class="tear-zone"
-							role="slider"
-							tabindex="-1"
-							aria-label={i18n.t('open.tear_label')}
-							aria-valuemin={0}
-							aria-valuemax={100}
-							aria-valuenow={Math.round(tear * 100)}
-							onpointerdown={(e) => {
-								e.stopPropagation();
-								tearDown(e);
-							}}
-							onpointermove={tearMove}
-							onpointerup={() => (minX = null)}
-							onpointercancel={() => (minX = null)}
-						>
-							<span class="tear-guide"></span><span class="tear-line"></span><span class="tear-hand"
-							></span>
+		<div class="open-head">
+			<div>
+				{#if collection}
+					<p class="eyebrow">
+						{i18n.t('open.pile_count', { n: session.pile.length + (phase === 'sealed' ? 0 : 1) })}
+					</p>
+					<h1>{collection.title}</h1>
+					<p class="pity" title={i18n.t('pity.hint')}>
+						{i18n.t('pity.left', { n: session.pityLeft })}
+					</p>
+				{/if}
+			</div>
+			<div class="open-ctrls">
+				<div class="seg" role="group" aria-label={i18n.t('open.mode')}>
+					<button
+						type="button"
+						aria-pressed={(userMode ?? mode) === 'one'}
+						onclick={() => chooseMode('one')}>{i18n.t('open.one_by_one')}</button
+					>
+					<button
+						type="button"
+						aria-pressed={(userMode ?? mode) === 'all'}
+						onclick={() => chooseMode('all')}>{i18n.t('open.all_at_once')}</button
+					>
+				</div>
+				{#if phase === 'spinning' || phase === 'landed'}
+					<button type="button" class="ghost-btn" onclick={skip}>{i18n.t('open.skip')}</button>
+				{/if}
+			</div>
+		</div>
+
+		{#if phase === 'empty'}
+			<div class="empty">
+				<h2>{i18n.t('open.empty_title')}</h2>
+				<p>{i18n.t('open.empty_hint')}</p>
+				<a class="btn" href="/">{i18n.t('open.go_lobby')}</a>
+			</div>
+		{:else}
+			<div
+				class="arena"
+				bind:this={arena}
+				tabindex="0"
+				role="button"
+				aria-label={i18n.t('open.arena')}
+				onpointerdown={nudge}
+				onkeydown={key}
+			>
+				{#if collection && (phase === 'sealed' || (phase === 'busy' && !reels.length))}
+					<div class="tear-wrap tilt" use:tilt>
+						<div class="tear-pack" class:torn class:started={tearStarted} style:--t={tear}>
+							<div class="tp-body"><Pack {collection} /></div>
+							<div class="tp-flap"><Pack {collection} /></div>
+							<div
+								class="tear-zone"
+								role="slider"
+								tabindex="-1"
+								aria-label={i18n.t('open.tear_label')}
+								aria-valuemin={0}
+								aria-valuemax={100}
+								aria-valuenow={Math.round(tear * 100)}
+								onpointerdown={(e) => {
+									e.stopPropagation();
+									tearDown(e);
+								}}
+								onpointermove={tearMove}
+								onpointerup={() => (minX = null)}
+								onpointercancel={() => (minX = null)}
+							>
+								<span class="tear-guide"></span><span class="tear-line"></span><span
+									class="tear-hand"
+								></span>
+							</div>
 						</div>
 					</div>
-				</div>
-			{:else if phase === 'done' && mode === 'one' && best}
-				<div class="best"><Card card={best.card} foil={best.foil} tilt large /></div>
-			{:else if reels.length}
-				<div class="reels" class:all={mode === 'all'}>
-					{#each reels as reel, ri (reel.i)}
-						<div
-							class="reel"
-							class:landed={reel.landed}
-							class:tell-rare={reel.tell === 'rare'}
-							class:tell-legendary={reel.tell === 'legendary'}
-							bind:this={reelEls[ri]}
-						>
-							<div class="reel-win">
-								<div class="rstrip">
-									{#each reel.strip as cell, j}
-										<div class="cell" class:win={j === 1}>
-											<Card
-												card={cell.card}
-												foil={cell.foil}
-												eager
-												large={mode === 'one' && j === 1}
-											/>
-										</div>
-									{/each}
-								</div>
-							</div>
-							<!-- Over the payline, outside the clipped window: the rarity frame,
-							     then the landed card, free to tilt and show its badge -->
-							<div class="payline" aria-hidden={!reel.landed}>
-								{#if reel.landed}
-									{@const p = pulled[reel.i]}
-									<div class="landed-card">
-										<Card card={p.card} foil={p.foil} tilt large={mode === 'one'}>
-											{#snippet badge()}
-												{#if p.isNew}<span class="c-badge new">{i18n.t('open.new')}</span>
-												{:else}<span class="c-badge">×{p.copies}</span>{/if}
-											{/snippet}
-										</Card>
+				{:else if phase === 'done' && mode === 'one' && best}
+					<div class="best"><Card card={best.card} foil={best.foil} tilt large /></div>
+				{:else if reels.length}
+					<div class="reels" class:all={mode === 'all'}>
+						{#each reels as reel, ri (reel.i)}
+							<div
+								class="reel"
+								class:landed={reel.landed}
+								class:tell-rare={reel.tell === 'rare'}
+								class:tell-legendary={reel.tell === 'legendary'}
+								bind:this={reelEls[ri]}
+							>
+								<div class="reel-win">
+									<div class="rstrip">
+										{#each reel.strip as cell, j}
+											<div class="cell" class:win={j === 1}>
+												<Card
+													card={cell.card}
+													foil={cell.foil}
+													eager
+													large={mode === 'one' && j === 1}
+												/>
+											</div>
+										{/each}
 									</div>
-								{/if}
+								</div>
+								<!-- Over the payline, outside the clipped window: the rarity frame,
+							     then the landed card, free to tilt and show its badge -->
+								<div class="payline" aria-hidden={!reel.landed}>
+									{#if reel.landed}
+										{@const p = pulled[reel.i]}
+										<div class="landed-card">
+											<Card card={p.card} foil={p.foil} tilt large={mode === 'one'}>
+												{#snippet badge()}
+													{#if p.isNew}<span class="c-badge new">{i18n.t('open.new')}</span>
+													{:else}<span class="c-badge">×{p.copies}</span>{/if}
+												{/snippet}
+											</Card>
+										</div>
+									{/if}
+								</div>
+								<span class="pay l"></span><span class="pay r"></span>
 							</div>
-							<span class="pay l"></span><span class="pay r"></span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<p class="hint" aria-live="polite">
+				{hint}{#if phase === 'sealed'}<span class="sr"> {i18n.t('open.tear_sr')}</span>{/if}
+			</p>
+
+			{#if phase === 'done'}
+				<div class="after">
+					<div class="stats">
+						<div><b>{stats.news}</b><span>{i18n.t('open.stat_new')}</span></div>
+						<div><b>{stats.dupes}</b><span>{i18n.t('open.stat_dupes')}</span></div>
+						<div>
+							<b class="mono">{i18n.num(stats.value)}</b><span>{i18n.t('open.stat_value')}</span>
 						</div>
-					{/each}
+					</div>
+					<div class="row">
+						{#if session.pile.length}
+							<button type="button" class="btn primary" onclick={setup}
+								>{i18n.t('open.next', { n: session.pile.length })}</button
+							>
+						{:else}
+							<a class="btn primary" href="/">{i18n.t('open.buy_more')}</a>
+						{/if}
+						<a class="btn" href={collection?.free ? '/binder' : `/binder?set=${collection?.slug}`}
+							>{i18n.t('open.see_binder')}</a
+						>
+						{#if best}
+							<button
+								type="button"
+								class="btn"
+								onclick={() => brag(best.card.slug, !!best.foil, { i18n, live, toasts })}
+								>{i18n.t('live.brag', { name: best.card.title })}</button
+							>
+						{/if}
+					</div>
 				</div>
 			{/if}
-		</div>
-		<p class="hint" aria-live="polite">
-			{hint}{#if phase === 'sealed'}<span class="sr"> {i18n.t('open.tear_sr')}</span>{/if}
-		</p>
 
-		{#if phase === 'done'}
-			<div class="after">
-				<div class="stats">
-					<div><b>{stats.news}</b><span>{i18n.t('open.stat_new')}</span></div>
-					<div><b>{stats.dupes}</b><span>{i18n.t('open.stat_dupes')}</span></div>
-					<div>
-						<b class="mono">{i18n.num(stats.value)}</b><span>{i18n.t('open.stat_value')}</span>
-					</div>
-				</div>
-				<div class="row">
-					{#if session.pile.length}
-						<button type="button" class="btn primary" onclick={setup}
-							>{i18n.t('open.next', { n: session.pile.length })}</button
-						>
+			<div class="tray">
+				{#each tray as slot}
+					{#if slot}
+						<div class="slotmini pop">
+							<Card card={slot.card} foil={slot.foil}>
+								{#snippet badge()}{#if slot.isNew}<span class="c-badge new"
+											>{i18n.t('open.new')}</span
+										>{/if}{/snippet}
+							</Card>
+						</div>
 					{:else}
-						<a class="btn primary" href="/">{i18n.t('open.buy_more')}</a>
+						<span class="slotmini empty"></span>
 					{/if}
-					<a class="btn" href={collection?.free ? '/binder' : `/binder?set=${collection?.slug}`}
-						>{i18n.t('open.see_binder')}</a
-					>
-					{#if best}
-						<button
-							type="button"
-							class="btn"
-							onclick={() => brag(best.card.slug, !!best.foil, { i18n, live, toasts })}
-							>{i18n.t('live.brag', { name: best.card.title })}</button
-						>
-					{/if}
-				</div>
+				{/each}
 			</div>
 		{/if}
-
-		<div class="tray">
-			{#each tray as slot}
-				{#if slot}
-					<div class="slotmini pop">
-						<Card card={slot.card} foil={slot.foil}>
-							{#snippet badge()}{#if slot.isNew}<span class="c-badge new">{i18n.t('open.new')}</span
-									>{/if}{/snippet}
-						</Card>
-					</div>
-				{:else}
-					<span class="slotmini empty"></span>
-				{/if}
-			{/each}
-		</div>
 	{/if}
 </div>
 
@@ -571,7 +603,9 @@
 			max(16px, env(safe-area-inset-left, 0px));
 		background: radial-gradient(ellipse at 50% 38%, var(--felt-hi), var(--felt) 72%);
 		color: var(--felt-ink);
-		overflow: hidden;
+		/* clip, not hidden: hidden would make the felt a scroll container, and the
+		   summary could not stick to the screen's bottom on phones */
+		overflow: clip;
 	}
 	.felt::before {
 		content: '';
@@ -980,6 +1014,15 @@
 		border-radius: 18px;
 		padding: 16px;
 		backdrop-filter: blur(6px);
+	}
+	/* Phones: the summary stays on screen above the bottom bar, so "Open
+	   next" is always in reach; the tray of minis scrolls under it */
+	@media (max-width: 699px) {
+		.after {
+			position: sticky;
+			bottom: 8px;
+			background: rgba(16, 20, 46, 0.92);
+		}
 	}
 	.stats {
 		display: grid;

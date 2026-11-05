@@ -3,7 +3,7 @@
 	const toasts = getToasts();
 </script>
 
-<div class="toasts" aria-live="polite">
+<div class="toasts" class:top={toasts.placement === 'top'} aria-live="polite">
 	{#each toasts.list as t (t.id)}
 		<div class="toast {t.kind}">
 			{t.text}{#if t.count > 1}<b class="count">×{t.count}</b>{/if}
@@ -27,9 +27,16 @@
 		pointer-events: none;
 		width: min(420px, calc(100% - 24px));
 	}
+	/* Under the header and the live ticker, for pages with controls at the bottom */
+	.toasts.top {
+		bottom: auto;
+		top: calc(112px + env(safe-area-inset-top, 0px));
+	}
 	/* Wider screens: the bottom left of the main column, away from the centred controls */
 	@media (min-width: 700px) {
-		.toasts {
+		.toasts,
+		.toasts.top {
+			top: auto;
 			bottom: 24px;
 			left: calc(86px + 16px);
 			translate: none;

@@ -63,10 +63,12 @@ test('achievements wait until the pack is revealed', async ({ page }) => {
 	await page.addInitScript(() => {
 		const w = window as unknown as { seen: Record<string, number> };
 		w.seen = {};
+		// One clock reading per DOM update: the two can land in the same one
 		new MutationObserver(() => {
+			const t = performance.now();
 			if (!w.seen.toast && document.querySelector('.toasts')?.textContent?.includes('First tear'))
-				w.seen.toast = performance.now();
-			if (!w.seen.after && document.querySelector('.after')) w.seen.after = performance.now();
+				w.seen.toast = t;
+			if (!w.seen.after && document.querySelector('.after')) w.seen.after = t;
 		}).observe(document, { subtree: true, childList: true, characterData: true });
 	});
 	await visit(page, '/open');

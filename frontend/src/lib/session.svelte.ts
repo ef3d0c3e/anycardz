@@ -5,6 +5,7 @@ import {
 	type FreePacksDto,
 	type MeDto,
 	type MissionsDto,
+	type TicketsDto,
 	type StreakDto
 } from './types';
 
@@ -22,6 +23,7 @@ export class Session {
 	pile = $state<string[]>([]);
 	streak = $state<StreakDto>() as StreakDto;
 	missions = $state<MissionsDto>() as MissionsDto;
+	tickets = $state<TicketsDto>() as TicketsDto;
 
 	constructor(me: MeDto) {
 		this.update(me);
@@ -39,6 +41,7 @@ export class Session {
 		this.pile = me.pile;
 		this.streak = me.streak;
 		this.missions = me.missions;
+		this.tickets = me.tickets;
 	}
 }
 
@@ -95,6 +98,8 @@ interface Toast {
 export class Toasts {
 	/** On screen: two at most, so a burst (a pack unlocking several achievements) never floods it */
 	list = $state<Toast[]>([]);
+	/** Phones: above the bottom bar, or under the header where a page keeps its controls low */
+	placement = $state<'bottom' | 'top'>('bottom');
 	#waiting: Toast[] = [];
 	#timers = new Map<number, ReturnType<typeof setTimeout>>();
 	#next = 0;
