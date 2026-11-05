@@ -12,6 +12,7 @@ front of everything, then monitoring with Prometheus and Grafana.
 - [4. Check it works](#4-check-it-works)
 - [Updating, backups, logs](#updating-backups-logs)
 - [Monitoring with Prometheus and Grafana](#monitoring-with-prometheus-and-grafana)
+- [Logs in Grafana (Loki)](#logs-in-grafana-loki)
 
 ## What you need
 
@@ -271,3 +272,96 @@ providers:
 Worth an alert: `sum(rate(anycardz_http_requests_total{status=~"5.."}[5m])) > 0.1`
 (server errors), `anycardz_db_pool_waiting > 0` for 5 minutes (database
 saturated), and the target being down (`up{job="anycardz"} == 0`).
+
+## Logs in Grafana (Loki)
+
+`docker compose logs` works on the server, but searching weeks of logs from
+Grafana is nicer. [Loki](https://grafana.com/oss/loki/) stores logs (it only
+indexes a few labels, so it stays small and light), and
+[Alloy](https://grafana.com/oss/alloy/) collects the containers' output and
+sends it to Loki. Both run next to the app with one more override,
+`deploy/compose.logs.yaml`:
+
+```sh
+# Caddy setup
+docker compose -f compose.prod.yaml -f deploy/compose.logs.yaml --env-file .env.prod up -d
+# nginx setup
+docker compose -f compose.prod.yaml -f deploy/compose.nginx.yaml -f deploy/compose.logs.yaml --env-file .env.prod up -d
+```
+
+What it does:
+
+- the API switches to JSON logs (`ANYCARDZ_LOG_FORMAT=json`): its level, route,
+  status and client address become searchable
+- Alloy reads the logs of this compose project's containers (api, web, db,
+  caddy) and labels each line with `app="anycardz"` and its `service`
+- Loki keeps them 30 days on the `loki-data` volume (`retention_period` in
+  `deploy/loki/loki.yaml`) and listens on `LOKI_PUBLISH`, by default
+  `127.0.0.1:3100`: the server only
+
+Alloy reads the Docker socket to find the containers. That gives it a lot of
+power over the host, like any tool that reads Docker logs: keep the image
+pinned and the config as it is.
+
+### Grafana on the same machine
+
+Add a Loki data source with the URL `http://127.0.0.1:3100` (from a Grafana
+container: `network_mode: host`, or publish Loki on the Docker bridge as for
+Prometheus).
+
+### Grafana on another machine
+
+Loki has no login of its own, so never publish it on the internet as is. Either
+reach it over a private network (WireGuard, Tailscale, a VPC) with
+`LOKI_PUBLISH=<private-ip>:3100`, or put it behind nginx with HTTPS and a
+password:
+
+```sh
+sudo htpasswd -c /etc/nginx/loki.htpasswd grafana   # apache2-utils
+```
+
+```nginx
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name loki.example.org;
+    ssl_certificate     /etc/letsencrypt/live/loki.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/loki.example.org/privkey.pem;
+
+    location / {
+        auth_basic           "Loki";
+        auth_basic_user_file /etc/nginx/loki.htpasswd;
+        proxy_pass           http://127.0.0.1:3100;
+        proxy_read_timeout   5m;
+    }
+}
+```
+
+In Grafana: Connections → Data sources → Loki, URL `https://loki.example.org`,
+Authentication → Basic authentication with that user and password.
+
+### The logs dashboard
+
+Import `deploy/grafana/anycardz-logs.json` like the metrics dashboard, then pick
+the Loki data source in the **Loki** menu at the top. It shows:
+
+- log lines per service over time
+- API warnings and errors, as a graph and as a list (4xx responses, which are
+  player mistakes like a wrong password or too few coins, are left out)
+- every log line, narrowed with the **Service** and **Contains** menus; API lines
+  read as "message · method route status", a click shows all their fields
+- failed and rate-limited logins with the client address the limits counted
+
+For anything else, Explore → Loki. Some queries:
+
+```logql
+{app="anycardz", service="api", level="ERROR"}                       # server errors
+{app="anycardz", service="api"} | json | span_http_status_code >= 500  # 5xx responses
+{app="anycardz", service="api"} | json | span_http_route="/api/market/{id}/buy"
+{app="anycardz", service="api"} |= "login failed" | json | fields_client="203.0.113.7"
+{app="anycardz", service=~"web|caddy"} |= "error"
+```
+
+An alert worth having, in Grafana Alerting with the Loki data source:
+`sum(count_over_time({app="anycardz", service="api", level="ERROR"} [5m])) > 0`.
+

@@ -62,6 +62,7 @@ Prometheus and Grafana run elsewhere; the API only exposes metrics. They are ser
 
 - `deploy/prometheus/scrape.yml`: scrape job to add to your Prometheus
 - `deploy/grafana/anycardz.json`: dashboard (Dashboards → Import), with traffic, latency, auth, live sockets, economy and DB pool panels
+- Logs: `deploy/compose.logs.yaml` adds Loki and Alloy, `deploy/grafana/anycardz-logs.json` is the logs dashboard (see [docs/deploy.md](docs/deploy.md#logs-in-grafana-loki)). `ANYCARDZ_LOG_FORMAT=json` makes the API log one JSON object a line
 
 | Metric | Labels | What it counts |
 | ------ | ------ | -------------- |
