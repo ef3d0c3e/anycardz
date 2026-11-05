@@ -1,0 +1,48 @@
+// Grafana Alloy: reads the logs of this compose project's containers and
+// sends them to Loki, labelled by service (api, web, db, caddy).
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  // New or restarted containers are picked up within this
+  refresh_interval = "15s"
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=" + sys.env("COMPOSE_PROJECT")]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = []
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  labels        = { app = "anycardz" }
+  forward_to    = [loki.process.levels.receiver]
+}
+
+// The API logs JSON: its level becomes a label, so Grafana can show errors only
+loki.process "levels" {
+  stage.match {
+    selector = "{service=\"api\"}"
+    stage.json {
+      expressions = { level = "level" }
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+  }
+  forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+  }
+}

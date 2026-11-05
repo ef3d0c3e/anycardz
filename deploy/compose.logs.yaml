@@ -1,0 +1,38 @@
+# Logs in Grafana: Loki stores them, Alloy collects this project's container logs.
+#   docker compose -f compose.prod.yaml [-f deploy/compose.nginx.yaml] -f deploy/compose.logs.yaml --env-file .env.prod up -d
+# Grafana reads Loki at LOKI_PUBLISH (default: the host only, 127.0.0.1:3100).
+services:
+  api:
+    environment:
+      # One JSON object a line: Loki filters by level, route, client...
+      ANYCARDZ_LOG_FORMAT: json
+
+  loki:
+    image: grafana/loki:3.7.9
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./deploy/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PUBLISH:-127.0.0.1:3100}:3100"
+    networks: [internal]
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    restart: unless-stopped
+    depends_on: [loki]
+    command: ["run", "--storage.path=/var/lib/alloy", "--server.http.listen-addr=127.0.0.1:12345", "/etc/alloy/config.alloy"]
+    environment:
+      # The compose project whose containers are collected (the directory name by default)
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-anycardz}
+      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+    volumes:
+      - ./deploy/loki/alloy.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    networks: [internal]
+
+volumes:
+  loki-data:
+  alloy-data:
