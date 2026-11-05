@@ -6,7 +6,7 @@ use std::sync::Arc;
 use actix_web::cookie::Cookie;
 use actix_web::dev::{Service, ServiceResponse};
 use actix_web::{App, test, web};
-use anycardz_api::{AppState, Catalog, Config, db, routes, schema, test_support};
+use anycardz_api::{AppState, Catalog, Config, db, game, routes, schema, test_support};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use serde_json::{Value, json};
@@ -1260,4 +1260,103 @@ async fn deleting_an_account_removes_it_and_its_trades() {
     // The name is free again
     register(&app, &a_name).await;
     let _ = b_name;
+}
+
+async fn set_user(ctx: &Ctx, cookie_name: &str, sql_set: &str) {
+    let mut conn = ctx.state.pool.get().await.unwrap();
+    diesel::sql_query(format!("UPDATE users SET {sql_set} WHERE username = $1"))
+        .bind::<diesel::sql_types::Text, _>(cookie_name)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+}
+
+#[actix_web::test]
+async fn free_packs_twice_a_day_from_every_collection() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("free");
+    let cookie = register(&app, &name).await;
+    let (_, me) = get(&app, "/api/me", &cookie).await;
+    assert_eq!(me["free_packs"]["ready"], true);
+    assert_eq!(me["free_packs"]["count"], 3);
+
+    // A double tap claims once
+    let (a, b) = futures_util::join!(
+        post(&app, "/api/free-packs/claim", &cookie, json!({})),
+        post(&app, "/api/free-packs/claim", &cookie, json!({}))
+    );
+    let mut statuses = [a.0, b.0];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409]);
+    let (_, me) = get(&app, "/api/me", &cookie).await;
+    assert_eq!(me["pile"], json!(["*", "*", "*"]));
+    assert_eq!(me["free_packs"]["ready"], false);
+    let next: chrono::DateTime<chrono::Utc> = me["free_packs"]["next_at"].as_str().unwrap().parse().unwrap();
+    let wait = next - chrono::Utc::now();
+    assert!(wait > chrono::Duration::hours(11) && wait <= chrono::Duration::hours(12), "{wait}");
+    let (s, err) = post(&app, "/api/free-packs/claim", &cookie, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("free_packs_not_ready")));
+
+    // Free packs cannot be bought
+    let (s, _) = post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "*" })).await;
+    assert_eq!(s, 404);
+
+    // Opened, they draw from the whole catalog
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..3 {
+        let (s, pack) = post(&app, "/api/pile/open", &cookie, json!({ "collection": "*" })).await;
+        assert_eq!(s, 200, "{pack}");
+        assert_eq!(pack["collection"], "*");
+        for c in pack["cards"].as_array().unwrap() {
+            let slug = c["card"].as_str().unwrap();
+            assert!(ctx.state.catalog.card(slug).is_some());
+            seen.insert(
+                ctx.state
+                    .catalog
+                    .collections
+                    .iter()
+                    .find(|col| col.cards.iter().any(|x| x == slug))
+                    .unwrap()
+                    .slug
+                    .clone(),
+            );
+        }
+    }
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["pile"], json!([]));
+
+    // Twelve hours later, three more
+    set_user(&ctx, &name, "free_packs_at = now() - interval '12 hours 1 minute'").await;
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["free_packs"]["ready"], true);
+    assert_eq!(post(&app, "/api/free-packs/claim", &cookie, json!({})).await.0, 200);
+    // The spread over collections is checked on the draw itself (game tests):
+    // the fixtures hold a single regular collection
+    assert_eq!(seen.len(), 1);
+}
+
+#[actix_web::test]
+async fn pity_guarantees_a_legendary() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("pity");
+    let cookie = register(&app, &name).await;
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["pity_left"], game::PITY_PACKS);
+
+    // One pack short of the guarantee: the next one holds a legendary
+    set_user(&ctx, &name, &format!("dry_packs = {}", game::PITY_PACKS - 1)).await;
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["pity_left"], 1);
+    post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
+    let (_, pack) = post(&app, "/api/pile/open", &cookie, json!({})).await;
+    assert!(pack["cards"].as_array().unwrap().iter().any(|c| c["rarity"] == "legendary"), "{pack}");
+    assert_eq!(pack["pity_left"], game::PITY_PACKS, "the countdown starts over");
+
+    // Any pack moves the countdown: down by one, or back to the top after a legendary
+    for _ in 0..3 {
+        let before = get(&app, "/api/me", &cookie).await.1["pity_left"].as_i64().unwrap();
+        post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
+        let (_, pack) = post(&app, "/api/pile/open", &cookie, json!({})).await;
+        let hit = pack["cards"].as_array().unwrap().iter().any(|c| c["rarity"] == "legendary");
+        let expected = if hit { game::PITY_PACKS as i64 } else { before - 1 };
+        assert_eq!(pack["pity_left"].as_i64().unwrap(), expected);
+    }
 }
