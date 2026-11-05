@@ -40,6 +40,8 @@ async fn ctx() -> Option<Ctx> {
         metrics_token: None,
         operator: None,
         contact: None,
+        vapid_private_key: None,
+        vapid_subject: None,
     };
     let catalog = Catalog::load(&config.data_dir, false).unwrap();
     let state = AppState {
@@ -49,6 +51,14 @@ async fn ctx() -> Option<Ctx> {
         limits: anycardz_api::ratelimit::AuthLimits::relaxed(),
         catalog: Arc::new(catalog),
         config: Arc::new(config),
+        // Push on, delivered to memory: tests open what the server sends
+        push: Arc::new(anycardz_api::push::Push {
+            vapid: Some(
+                anycardz_api::push::Vapid::new(&anycardz_api::push::Vapid::generate().0, "mailto:t@example.org".into())
+                    .unwrap(),
+            ),
+            transport: anycardz_api::push::Transport::Memory(Default::default()),
+        }),
     };
     Some(Ctx { state: web::Data::new(state), _cache: cache })
 }
@@ -991,6 +1001,7 @@ async fn auth_rate_limits() {
         limits: Default::default(),
         catalog: ctx.state.catalog.clone(),
         config: ctx.state.config.clone(),
+        push: ctx.state.push.clone(),
     });
     let app = test::init_service(App::new().app_data(state).configure(routes::configure)).await;
     let sign_up = |ip: &str| {
@@ -1051,6 +1062,7 @@ async fn metrics_count_requests_and_game_events() {
         limits: anycardz_api::ratelimit::AuthLimits::relaxed(),
         catalog: ctx.state.catalog.clone(),
         config: Arc::new(config),
+        push: ctx.state.push.clone(),
     });
     let app = test::init_service(
         App::new()
@@ -1681,4 +1693,86 @@ where
     S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
 {
     get(app, "/api/me", cookie).await.1["username"].as_str().unwrap().to_owned()
+}
+
+/// A browser's side of a push subscription: its keys and the JSON it posts
+fn browser_subscription() -> (p256::SecretKey, [u8; 16], Value) {
+    use base64::Engine;
+    use p256::elliptic_curve::sec1::ToEncodedPoint;
+    let b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let key = p256::SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let auth: [u8; 16] = rand::random();
+    let endpoint = format!("https://fcm.googleapis.com/fcm/send/{}", unique("dev"));
+    let json = json!({ "endpoint": endpoint, "keys": {
+        "p256dh": b64.encode(key.public_key().to_encoded_point(false).as_bytes()),
+        "auth": b64.encode(auth),
+    }});
+    (key, auth, json)
+}
+
+/// What was pushed to one endpoint, opened with the browser's keys
+fn pushed(ctx: &Ctx, endpoint: &str, key: &p256::SecretKey, auth: &[u8]) -> Vec<Value> {
+    ctx.state
+        .push
+        .transport
+        .take_for(endpoint)
+        .into_iter()
+        .map(|d| {
+            assert!(d.authorization.starts_with("vapid t="));
+            serde_json::from_slice(&anycardz_api::push::decrypt(key, auth, &d.body).unwrap()).unwrap()
+        })
+        .collect()
+}
+
+#[actix_web::test]
+async fn push_subscriptions_follow_devices_and_carry_notifications() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, _), (b_name, b, _)) = pair(&app).await;
+
+    let (_, st) = get(&app, "/api/push", &b).await;
+    assert_eq!(st["subscribed"], false);
+    assert_eq!(st["key"].as_str().map(str::len), Some(87), "a P-256 public key, base64url");
+
+    let (key, auth, sub) = browser_subscription();
+    let endpoint = sub["endpoint"].as_str().unwrap().to_owned();
+    let mut bad = sub.clone();
+    bad["endpoint"] = json!("https://127.0.0.1:8080/steal");
+    let (s, err) = put(&app, "/api/push", &b, bad).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("push_endpoint")));
+    let mut bad = sub.clone();
+    bad["keys"]["auth"] = json!("short");
+    let (s, err) = put(&app, "/api/push", &b, bad).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("push_keys")));
+    assert_eq!(put(&app, "/api/push", &b, sub.clone()).await.0, 204);
+    assert_eq!(get(&app, "/api/push", &b).await.1["subscribed"], true);
+
+    // Bob is not on the site: Alice's request reaches his device, encrypted for it
+    post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+    let got = pushed(&ctx, &endpoint, &key, &auth);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0]["body"], format!("{a_name} wants to be your friend"));
+    assert_eq!(got[0]["url"], "/friends");
+    assert_eq!(got[0]["title"], "AnyCardz");
+
+    // Unsubscribing stops it
+    assert_eq!(del(&app, "/api/push", &b).await.0, 204);
+    assert_eq!(get(&app, "/api/push", &b).await.1["subscribed"], false);
+    post(&app, &format!("/api/friends/{a_name}"), &b, json!({})).await; // accepts: a push for Alice, not Bob
+    assert!(pushed(&ctx, &endpoint, &key, &auth).is_empty());
+
+    // Signing a device out removes its subscription
+    assert_eq!(put(&app, "/api/push", &b, sub).await.0, 204);
+    let (_, sessions) = get(&app, "/api/account/sessions", &b).await;
+    let current = sessions.as_array().unwrap().iter().find(|s| s["current"] == true).unwrap()["id"].as_i64().unwrap();
+    let other = login_as(&app, &b_name, "123456789", "Firefox").await.unwrap();
+    assert_eq!(del(&app, &format!("/api/account/sessions/{current}"), &other).await.0, 200);
+    let mut conn = ctx.state.pool.get().await.unwrap();
+    let left: i64 = anycardz_api::schema::push_subscriptions::table
+        .filter(anycardz_api::schema::push_subscriptions::endpoint.eq(&endpoint))
+        .count()
+        .get_result(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(left, 0);
 }
