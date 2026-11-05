@@ -291,6 +291,17 @@ async fn catalog_is_localized_and_serves_thumbnails() {
     let res = test::call_service(&app, test::TestRequest::get().uri("/api/cards/quartz/art?w=420").to_request()).await;
     assert_eq!(res.status(), 200);
     assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
+    // First requests racing for a thumbnail not made yet all get it
+    let race = (0..8)
+        .map(|_| test::call_service(&app, test::TestRequest::get().uri("/api/cards/mica/art?w=240").to_request()));
+    for res in futures_util::future::join_all(race).await {
+        assert_eq!(res.status(), 200);
+    }
+    for w in [96, 240, 840] {
+        let uri = format!("/api/cards/quartz/art?w={w}");
+        let res = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+        assert_eq!(res.status(), 200, "{uri}");
+    }
     let res = test::call_service(&app, test::TestRequest::get().uri("/api/cards/quartz/art?w=13").to_request()).await;
     assert_eq!(res.status(), 422);
     let res = test::call_service(&app, test::TestRequest::get().uri("/api/assets/..%2Fcards").to_request()).await;

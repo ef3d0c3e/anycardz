@@ -14,7 +14,11 @@ use crate::game::BOOSTER_PRICE;
 use crate::i18n::Lang;
 
 /// Widths the thumbnail endpoint renders. A fixed list keeps the cache bounded.
-pub const THUMB_WIDTHS: [u32; 2] = [420, 840];
+/// 96 for list thumbnails, 240 and 420 for cards at their usual sizes (the
+/// browser picks with srcset), 840 for a card shown large.
+pub const THUMB_WIDTHS: [u32; 4] = [96, 240, 420, 840];
+/// Without `w`: the size cards were always served at
+const DEFAULT_WIDTH: u32 = 420;
 
 #[derive(Serialize)]
 pub struct CardDto<'a> {
@@ -126,7 +130,7 @@ pub async fn card_art(
     q: web::Query<ArtQuery>,
 ) -> ApiResult<HttpResponse> {
     let card = state.catalog.card(&slug).ok_or(ApiError::NotFound("unknown_card"))?;
-    let width = q.w.unwrap_or(THUMB_WIDTHS[0]);
+    let width = q.w.unwrap_or(DEFAULT_WIDTH);
     if !THUMB_WIDTHS.contains(&width) {
         return Err(ApiError::Invalid("unsupported_width"));
     }
@@ -143,8 +147,9 @@ fn make_thumbnail(source: &std::path::Path, out: &std::path::Path, width: u32) -
     let img =
         if img.width() > width { img.resize(width, u32::MAX, image::imageops::FilterType::Lanczos3) } else { img };
     std::fs::create_dir_all(out.parent().unwrap())?;
-    // Write then rename: concurrent first requests never serve a half-written file
-    let tmp = out.with_extension(format!("tmp{}", std::process::id()));
+    // Each request writes its own file, then renames it over the target (atomic):
+    // concurrent first requests never see a half-written file nor collide
+    let tmp = out.with_extension(format!("tmp{}-{:016x}", std::process::id(), rand::random::<u64>()));
     let mut file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, 82).encode_image(&img.to_rgb8())?;
     drop(file);
@@ -177,7 +182,14 @@ fn cached_file(path: PathBuf, req: &HttpRequest) -> anyhow::Result<HttpResponse>
     let mut res = NamedFile::open(path)?.use_etag(true).into_response(req);
     res.headers_mut().insert(
         actix_web::http::header::CACHE_CONTROL,
-        CacheControl(vec![CacheDirective::Public, CacheDirective::MaxAge(86_400)]).to_string().parse().unwrap(),
+        CacheControl(vec![
+            CacheDirective::Public,
+            CacheDirective::MaxAge(86_400),
+            CacheDirective::Extension("stale-while-revalidate".into(), Some("604800".into())),
+        ])
+        .to_string()
+        .parse()
+        .unwrap(),
     );
     Ok(res)
 }
