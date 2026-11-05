@@ -3,10 +3,17 @@ use std::sync::Arc;
 use actix_web::{App, HttpServer, middleware, web};
 use anycardz_api::metrics;
 use anycardz_api::{AppState, Catalog, Config, db, routes};
+use anyhow::Context;
 use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    // `anycardz-api vapid-keys`: a key pair for Web Push, to put in the environment
+    if std::env::args().nth(1).as_deref() == Some("vapid-keys") {
+        let (private, public) = anycardz_api::push::Vapid::generate();
+        println!("ANYCARDZ_VAPID_PRIVATE_KEY={private}\n# public key (served at /api/push): {public}");
+        return Ok(());
+    }
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
 
@@ -23,6 +30,19 @@ async fn main() -> anyhow::Result<()> {
     } else {
         Default::default()
     };
+    let push = match (&config.vapid_private_key, config.push_subject()) {
+        (Some(key), Some(subject)) => {
+            let vapid = anycardz_api::push::Vapid::new(key, subject)
+                .context("ANYCARDZ_VAPID_PRIVATE_KEY is not a P-256 key")?;
+            tracing::info!("web push on");
+            anycardz_api::push::Push { vapid: Some(vapid), transport: anycardz_api::push::Transport::http() }
+        }
+        (Some(_), None) => {
+            tracing::warn!("web push off: set ANYCARDZ_VAPID_SUBJECT or an email ANYCARDZ_CONTACT");
+            anycardz_api::push::Push::disabled()
+        }
+        (None, _) => anycardz_api::push::Push::disabled(),
+    };
     let state = web::Data::new(AppState {
         pool,
         live: Default::default(),
@@ -30,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
         limits,
         catalog: Arc::new(catalog),
         config: Arc::new(config),
+        push: Arc::new(push),
     });
     // Prometheus gets its own listener, kept off the public site
     let scraper = match state.config.metrics_bind.clone() {

@@ -9,6 +9,7 @@ pub mod inventory;
 pub mod live;
 pub mod metrics;
 pub mod progress;
+pub mod push;
 pub mod ratelimit;
 pub mod routes;
 pub mod schema;
@@ -28,4 +29,5 @@ pub struct AppState {
     pub limits: ratelimit::AuthLimits,
     pub catalog: Arc<Catalog>,
     pub config: Arc<Config>,
+    pub push: Arc<push::Push>,
 }

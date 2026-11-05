@@ -12,6 +12,7 @@ pub mod market;
 pub mod notifications;
 pub mod player;
 pub mod players;
+pub mod push;
 pub mod search;
 pub mod shop;
 pub mod social;
@@ -82,6 +83,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(search::search)
             .service(achievements::list)
             .service(achievements::leaderboard)
+            .service(push::status)
+            .service(push::subscribe)
+            .service(push::unsubscribe)
             .service(market::browse)
             .service(market::mine)
             .service(market::list)

@@ -163,6 +163,18 @@ diesel::table! {
         closed_at -> Nullable<Timestamptz>,
     }
 }
+diesel::table! {
+    push_subscriptions (id) {
+        id -> Int8,
+        user_id -> Int8,
+        session_id -> Int8,
+        endpoint -> Text,
+        p256dh -> Text,
+        auth -> Text,
+        lang -> Text,
+        created_at -> Timestamptz,
+    }
+}
 diesel::joinable!(shout_messages -> users (user_id));
 diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(trade_lines -> trades (trade_id));
@@ -187,4 +199,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     notifications,
     achievements,
     listings,
+    push_subscriptions,
 );

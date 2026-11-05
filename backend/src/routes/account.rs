@@ -13,8 +13,8 @@ use crate::AppState;
 use crate::auth::{self, CurrentUser, SESSION_COOKIE};
 use crate::error::{ApiError, ApiResult};
 use crate::schema::{
-    blocks, boosters, friendships, listings, notifications, owned_cards, sessions, shout_messages, streaks, topups,
-    trade_lines, trades, users,
+    blocks, boosters, friendships, listings, notifications, owned_cards, push_subscriptions, sessions, shout_messages,
+    streaks, topups, trade_lines, trades, users,
 };
 
 /// The current password, or an error. Wrong guesses count against the same
@@ -260,6 +260,11 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         ))
         .load(conn)
         .await?;
+    let pushes: Vec<(String, DateTime<Utc>)> = push_subscriptions::table
+        .filter(push_subscriptions::user_id.eq(uid))
+        .select((push_subscriptions::endpoint, push_subscriptions::created_at))
+        .load(conn)
+        .await?;
     let my_sessions: Vec<(String, DateTime<Utc>, DateTime<Utc>)> = sessions::table
         .filter(sessions::user_id.eq(uid))
         .select((sessions::user_agent, sessions::created_at, sessions::last_seen_at))
@@ -355,6 +360,7 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         "notifications": notes.iter().map(|(kind, actor, trade, read, at)| json!({
             "kind": kind, "from": actor.map(name), "trade": trade, "read_at": read, "at": at,
         })).collect::<Vec<_>>(),
+        "push_subscriptions": pushes.iter().map(|(endpoint, at)| json!({ "endpoint": endpoint, "since": at })).collect::<Vec<_>>(),
         "sessions": my_sessions.iter().map(|(ua, created, seen)| json!({
             "device": ua, "signed_in_at": created, "last_seen_at": seen,
         })).collect::<Vec<_>>(),

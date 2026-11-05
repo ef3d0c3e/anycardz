@@ -19,6 +19,10 @@ pub struct Config {
     /// Who runs the site and how to reach them, shown in the terms
     pub operator: Option<String>,
     pub contact: Option<String>,
+    /// Web Push: the VAPID private key (base64url P-256 scalar), push is off without it
+    pub vapid_private_key: Option<String>,
+    /// Who push services contact about this server: `mailto:` or `https:`
+    pub vapid_subject: Option<String>,
 }
 
 impl Config {
@@ -41,6 +45,18 @@ impl Config {
             metrics_token: std::env::var("ANYCARDZ_METRICS_TOKEN").ok().filter(|s| !s.trim().is_empty()),
             operator: std::env::var("ANYCARDZ_OPERATOR").ok().filter(|s| !s.trim().is_empty()),
             contact: std::env::var("ANYCARDZ_CONTACT").ok().filter(|s| !s.trim().is_empty()),
+            vapid_private_key: std::env::var("ANYCARDZ_VAPID_PRIVATE_KEY").ok().filter(|s| !s.trim().is_empty()),
+            vapid_subject: std::env::var("ANYCARDZ_VAPID_SUBJECT").ok().filter(|s| !s.trim().is_empty()),
+        })
+    }
+
+    /// The VAPID subject: set explicitly, else the contact address when it is an email
+    pub fn push_subject(&self) -> Option<String> {
+        self.vapid_subject.clone().or_else(|| {
+            self.contact
+                .as_deref()
+                .filter(|c| c.contains('@') && !c.contains(' '))
+                .map(|c| if c.starts_with("mailto:") { c.to_owned() } else { format!("mailto:{c}") })
         })
     }
 }

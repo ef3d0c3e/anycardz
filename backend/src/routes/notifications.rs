@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::auth::CurrentUser;
 use crate::error::ApiResult;
+use crate::routes::push::Note;
 use crate::routes::social::avatar_url;
 use crate::schema::{notifications, users};
 
@@ -132,6 +133,8 @@ pub async fn notify(
     };
     let row: Row = (id, kind.as_str().to_owned(), Some(actor), trade, None, None, now);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    let note = Note { kind: kind.as_str(), actor: dto.actor.as_deref(), trade, detail: None };
+    super::push::notify(state, conn, user, note).await?;
     state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())
 }
@@ -149,6 +152,8 @@ pub async fn achievement(state: &AppState, conn: &mut AsyncPgConnection, user: i
         .await?;
     let row: Row = (id, Kind::Achievement.as_str().to_owned(), None, None, Some(key.to_owned()), None, at);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    let note = Note { kind: Kind::Achievement.as_str(), actor: None, trade: None, detail: Some(key) };
+    super::push::notify(state, conn, user, note).await?;
     state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())
 }
@@ -172,8 +177,11 @@ pub async fn market_sold(
         .returning((notifications::id, notifications::created_at))
         .get_result(conn)
         .await?;
-    let row: Row = (id, Kind::MarketSold.as_str().to_owned(), Some(buyer), None, Some(detail), None, at);
+    let row: Row = (id, Kind::MarketSold.as_str().to_owned(), Some(buyer), None, Some(detail.clone()), None, at);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    let note =
+        Note { kind: Kind::MarketSold.as_str(), actor: dto.actor.as_deref(), trade: None, detail: Some(&detail) };
+    super::push::notify(state, conn, seller, note).await?;
     state.live.notify(seller, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())
 }
