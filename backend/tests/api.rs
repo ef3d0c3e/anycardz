@@ -1360,3 +1360,74 @@ async fn pity_guarantees_a_legendary() {
         assert_eq!(pack["pity_left"].as_i64().unwrap(), expected);
     }
 }
+
+#[actix_web::test]
+async fn completing_a_set_pays_once() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, b_id)) = pair(&app).await;
+    let set = ctx.state.catalog.collection("minerals").unwrap().cards.clone();
+    let reward = anycardz_api::progress::set_reward(set.len());
+    let (_, col) = get(&app, "/api/collections/minerals", &a).await;
+    assert_eq!(col["set_reward"], reward);
+
+    // Every card but the last; the partner has it
+    let (last, rest) = set.split_last().unwrap();
+    for c in rest {
+        give(&ctx, a_id, c, None, 1).await;
+    }
+    give(&ctx, b_id, last, None, 1).await;
+    let coins = |me: &Value| me["coins"].as_i64().unwrap();
+    let before = coins(&get(&app, "/api/me", &a).await.1);
+
+    let (_, t) = post(&app, "/api/trades", &b, json!({ "with": a_name })).await;
+    let id = t["id"].as_i64().unwrap();
+    let (s, r) =
+        put(&app, &format!("/api/trades/{id}"), &b, json!({ "version": 1, "give": [{ "card": last, "count": 1 }] }))
+            .await;
+    assert_eq!(s, 200, "{r}");
+    let v = r["version"].as_i64().unwrap();
+    post(&app, &format!("/api/trades/{id}/seal"), &a, json!({ "version": v })).await;
+    let (s, r) = post(&app, &format!("/api/trades/{id}/seal"), &b, json!({ "version": v })).await;
+    assert_eq!((s, r["state"].as_str()), (200, Some("done")), "{r}");
+
+    // Paid, remembered, told, and shown on the profile
+    assert_eq!(coins(&get(&app, "/api/me", &a).await.1), before + reward);
+    let (_, binder) = get(&app, "/api/binder", &a).await;
+    assert_eq!(binder["achievements"], json!(["set:minerals"]));
+    let (_, notes) = get(&app, "/api/notifications", &a).await;
+    let note = notes["items"].as_array().unwrap().iter().find(|n| n["kind"] == "achievement").unwrap().clone();
+    assert_eq!(note["detail"], "set:minerals");
+    let (_, profile) = get(&app, &format!("/api/players/{a_name}"), &b).await;
+    assert_eq!(profile["achievements"][0]["key"], "set:minerals");
+    assert_eq!(profile["achievements"][0]["coins"], reward);
+
+    // Never twice, even when more cards of the set land
+    post(&app, "/api/shop/boosters", &a, json!({ "collection": "minerals" })).await;
+    let (_, pack) = post(&app, "/api/pile/open", &a, json!({})).await;
+    assert_eq!(pack["unlocked"], json!([]));
+    let _ = b_name;
+}
+
+#[actix_web::test]
+async fn a_pack_can_complete_sets_and_foil_sets() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("foilset");
+    let cookie = register(&app, &name).await;
+    let id = get(&app, "/api/me", &cookie).await.1["id"].as_i64().unwrap();
+    let set = ctx.state.catalog.collection("minerals").unwrap().cards.clone();
+    // The whole set, all in foil: the next card gained completes both at once
+    for c in &set {
+        give(&ctx, id, c, Some("foil2"), 1).await;
+    }
+    post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
+    let (_, pack) = post(&app, "/api/pile/open", &cookie, json!({})).await;
+    let keys: Vec<&str> = pack["unlocked"].as_array().unwrap().iter().map(|u| u["key"].as_str().unwrap()).collect();
+    assert_eq!(keys, ["set:minerals", "foilset:minerals"]);
+    let paid: i64 = pack["unlocked"].as_array().unwrap().iter().map(|u| u["coins"].as_i64().unwrap()).sum();
+    assert_eq!(
+        paid,
+        anycardz_api::progress::set_reward(set.len()) + anycardz_api::progress::foil_set_reward(set.len())
+    );
+}
