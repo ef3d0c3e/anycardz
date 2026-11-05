@@ -298,6 +298,7 @@ pub async fn list(
         })
         .await?;
     state.metrics.market("listed");
+    crate::missions::progress(&state, uid, crate::missions::Event::MarketList, 1).await;
     let row: ListingRow = listings::table
         .inner_join(users::table.on(users::id.eq(listings::seller_id)))
         .filter(listings::id.eq(id))
@@ -417,6 +418,7 @@ pub async fn buy(state: web::Data<AppState>, user: CurrentUser, id: web::Path<i6
 
     let rarity = state.catalog.card(&card).map(|c| c.rarity).unwrap_or(Rarity::Common);
     state.metrics.market("sold");
+    crate::missions::progress(&state, uid, crate::missions::Event::MarketBuy, 1).await;
     state.metrics.market_fee(fee);
     state.metrics.spent("market", price);
     state.metrics.earned("market", price - fee);

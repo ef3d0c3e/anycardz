@@ -75,6 +75,7 @@ struct MeDto {
     /// The player has not accepted the current terms yet
     terms_outdated: bool,
     free_packs: FreePacksDto,
+    missions: crate::missions::MissionsDto,
     /// Packs to open before a legendary is guaranteed, the next one included
     pity_left: i32,
 }
@@ -121,7 +122,15 @@ pub async fn claim_free_packs(state: web::Data<AppState>, user: CurrentUser) -> 
         })
         .await?;
     state.metrics.free_packs();
+    crate::missions::progress(&state, user.id, crate::missions::Event::FreePacks, 1).await;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "pile": pile, "free_packs": free_packs_dto(Some(at)) })))
+}
+
+/// Today's missions and how far they got
+#[get("/missions")]
+pub async fn get_missions(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<HttpResponse> {
+    let mut conn = state.pool.get().await?;
+    Ok(HttpResponse::Ok().json(crate::missions::dto(&mut conn, user.id).await?))
 }
 
 #[get("/me")]
@@ -155,6 +164,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         notifications: crate::routes::notifications::unread(&mut conn, user.id).await?,
         terms_outdated: terms != Some(crate::routes::legal::TERMS_VERSION),
         free_packs: free_packs_dto(free_at),
+        missions: crate::missions::dto(&mut conn, user.id).await?,
         pity_left: game::pity_left(dry),
         username: user.username,
         email: user.email,
@@ -318,6 +328,9 @@ pub async fn open_booster(
     for c in &cards {
         state.metrics.card("pack", c.rarity, c.foil.is_some());
     }
+    crate::missions::progress(&state, uid, crate::missions::Event::OpenPack, 1).await;
+    let rares = cards.iter().filter(|c| c.rarity != crate::data::Rarity::Common).count() as i32;
+    crate::missions::progress(&state, uid, crate::missions::Event::PullRare, rares).await;
     for c in &cards {
         state.live.pull(crate::live::PullEvent {
             user: user.username.clone(),
@@ -498,5 +511,6 @@ pub async fn sell_card(
         })
         .await?;
     state.metrics.earned("sell", price);
+    crate::missions::progress(&state, user.id, crate::missions::Event::ShopSell, 1).await;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "coins": coins, "sold_for": price, "remaining": remaining })))
 }

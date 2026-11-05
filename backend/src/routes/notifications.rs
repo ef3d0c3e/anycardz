@@ -28,6 +28,8 @@ pub enum Kind {
     Achievement,
     /// A listing sold; card, foil and coins are in `detail` as JSON
     MarketSold,
+    /// A daily mission done: `key:coins` in `detail`, or `bonus:0` for all three
+    Mission,
 }
 
 impl Kind {
@@ -42,6 +44,7 @@ impl Kind {
             Kind::TradeCancelled => "trade_cancelled",
             Kind::Achievement => "achievement",
             Kind::MarketSold => "market_sold",
+            Kind::Mission => "mission",
         }
     }
 }
@@ -153,6 +156,25 @@ pub async fn achievement(state: &AppState, conn: &mut AsyncPgConnection, user: i
     let row: Row = (id, Kind::Achievement.as_str().to_owned(), None, None, Some(key.to_owned()), None, at);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
     let note = Note { kind: Kind::Achievement.as_str(), actor: None, trade: None, detail: Some(key) };
+    super::push::notify(state, conn, user, note).await?;
+    state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
+    Ok(())
+}
+
+/// Tells a player a daily mission is done (`key:coins`), or all three (`bonus:0`)
+pub async fn mission(state: &AppState, conn: &mut AsyncPgConnection, user: i64, detail: &str) -> ApiResult<()> {
+    let (id, at): (i64, DateTime<Utc>) = diesel::insert_into(notifications::table)
+        .values((
+            notifications::user_id.eq(user),
+            notifications::kind.eq(Kind::Mission.as_str()),
+            notifications::detail.eq(detail),
+        ))
+        .returning((notifications::id, notifications::created_at))
+        .get_result(conn)
+        .await?;
+    let row: Row = (id, Kind::Mission.as_str().to_owned(), None, None, Some(detail.to_owned()), None, at);
+    let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    let note = Note { kind: Kind::Mission.as_str(), actor: None, trade: None, detail: Some(detail) };
     super::push::notify(state, conn, user, note).await?;
     state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())

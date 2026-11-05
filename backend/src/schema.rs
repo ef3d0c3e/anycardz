@@ -175,6 +175,15 @@ diesel::table! {
         created_at -> Timestamptz,
     }
 }
+diesel::table! {
+    daily_missions (user_id, day, key) {
+        user_id -> Int8,
+        day -> Date,
+        key -> Text,
+        progress -> Int4,
+        done_at -> Nullable<Timestamptz>,
+    }
+}
 diesel::joinable!(shout_messages -> users (user_id));
 diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(trade_lines -> trades (trade_id));
@@ -200,4 +209,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     achievements,
     listings,
     push_subscriptions,
+    daily_missions,
 );

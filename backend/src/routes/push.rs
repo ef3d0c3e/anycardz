@@ -209,15 +209,27 @@ pub fn message(state: &AppState, lang: Lang, n: &Note) -> Option<Message> {
             }
         }
         "mission" => {
-            let coins = n.detail.and_then(|d| d.rsplit(':').next()).and_then(|c| c.parse::<i64>().ok()).unwrap_or(0);
-            (
-                if fr {
-                    format!("Mission du jour accomplie · +{coins} pièces")
-                } else {
-                    format!("Daily mission done · +{coins} coins")
-                },
-                "/".to_owned(),
-            )
+            let detail = n.detail.unwrap_or("");
+            if detail.starts_with("bonus") {
+                (
+                    if fr {
+                        "Les trois missions du jour sont faites : un booster gratuit t’attend".to_owned()
+                    } else {
+                        "All three daily missions done: a free pack is in your pile".to_owned()
+                    },
+                    "/open".to_owned(),
+                )
+            } else {
+                let coins = detail.rsplit(':').next().and_then(|c| c.parse::<i64>().ok()).unwrap_or(0);
+                (
+                    if fr {
+                        format!("Mission du jour accomplie · +{coins} pièces")
+                    } else {
+                        format!("Daily mission done · +{coins} coins")
+                    },
+                    "/".to_owned(),
+                )
+            }
         }
         _ => return None,
     };

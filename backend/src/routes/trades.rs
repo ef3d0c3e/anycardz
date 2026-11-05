@@ -473,6 +473,7 @@ pub async fn seal_trade(
             let got = ls.iter().filter(|l| l.side == given_by).map(|l| l.card.as_str());
             crate::progress::cards_gained(&state, receiver, name, got).await?;
             crate::progress::award(&state, receiver, name, &[], &[crate::progress::Metric::Trades]).await?;
+            crate::missions::progress(&state, receiver, crate::missions::Event::Trade, 1).await;
         }
     }
     notify(&state, &mut conn, t.partner(uid), kind, uid, Some(t.id)).await?;

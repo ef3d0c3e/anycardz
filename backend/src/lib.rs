@@ -8,6 +8,7 @@ pub mod i18n;
 pub mod inventory;
 pub mod live;
 pub mod metrics;
+pub mod missions;
 pub mod progress;
 pub mod push;
 pub mod ratelimit;

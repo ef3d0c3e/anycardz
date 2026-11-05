@@ -90,6 +90,7 @@ pub async fn tradeup(
         at: chrono::Utc::now(),
     });
     state.metrics.card("tradeup", target, false);
+    crate::missions::progress(&state, uid, crate::missions::Event::Tradeup, 1).await;
     let mut unlocked = crate::progress::cards_gained(&state, uid, &user.username, [won.as_str()]).await?;
     let mut events = vec!["first_tradeup"];
     if target == Rarity::Legendary {
@@ -171,6 +172,7 @@ pub async fn roulette(
     })
     .await?;
     state.metrics.roulette(won.is_some());
+    crate::missions::progress(&state, user.id, crate::missions::Event::Roulette, 1).await;
     if won.is_some() {
         state.metrics.card("roulette", target_rarity, true);
     }

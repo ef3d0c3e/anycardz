@@ -103,6 +103,7 @@ pub struct Metrics {
     market: Family<ResultLabels, Counter>,
     market_fees: Counter,
     push: Family<ResultLabels, Counter>,
+    missions: Family<KindLabels, Counter>,
     auth: Family<AuthLabels, Counter>,
     shouts: Counter,
     free_packs: Counter,
@@ -139,6 +140,7 @@ impl Default for Metrics {
             market: Default::default(),
             market_fees: Default::default(),
             push: Default::default(),
+            missions: Default::default(),
             auth: Default::default(),
             shouts: Default::default(),
             free_packs: Default::default(),
@@ -160,6 +162,7 @@ impl Default for Metrics {
         r.register("roulette_spins", "Foil roulette spins, by result (won, lost)", m.roulette.clone());
         r.register("trades", "Trades ended, by result (done, cancelled)", m.trades.clone());
         r.register("market_listings", "Marketplace listings, by event (listed, withdrawn, sold)", m.market.clone());
+        r.register("missions_done", "Daily missions finished, by mission (bonus: all three)", m.missions.clone());
         r.register("push_messages", "Web Push deliveries, by result (sent, gone, failed)", m.push.clone());
         r.register("market_fees_coins", "Coins taken as marketplace fees, out of the economy", m.market_fees.clone());
         r.register("auth_attempts", "Logins and sign-ups, by result", m.auth.clone());
@@ -206,6 +209,10 @@ impl Metrics {
     /// `result`: done, cancelled
     pub fn market(&self, result: &'static str) {
         self.market.get_or_create(&ResultLabels { result }).inc();
+    }
+
+    pub fn mission(&self, kind: &'static str) {
+        self.missions.get_or_create(&KindLabels { kind }).inc();
     }
 
     /// The push counter, for deliveries that finish in the background
