@@ -120,6 +120,10 @@ pub async fn roulette(
     let RouletteBody { target, burn } = body.into_inner();
     let target_rarity = catalog.card(&target).ok_or(ApiError::NotFound("unknown_card"))?.rarity;
     let burn = inventory::normalize(&catalog, &burn)?;
+    // Foils are what the roulette makes: they are never fuel for it
+    if burn.iter().any(|c| c.foil) {
+        return Err(ApiError::Invalid("roulette_foil"));
+    }
     if burn.iter().map(|c| c.count).sum::<i64>() > ROULETTE_MAX_BURN {
         return Err(ApiError::Invalid("roulette_count"));
     }

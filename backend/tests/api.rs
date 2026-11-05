@@ -396,6 +396,16 @@ async fn roulette_burns_and_wins_or_destroys() {
     )
     .await;
     assert_eq!((s, err["error"].as_str()), (422, Some("roulette_count")));
+    give(&ctx, uid, "quartz", Some("foil2"), 1).await;
+    let (s, err) = post(
+        &app,
+        "/api/forge/roulette",
+        &cookie,
+        json!({ "target": "quartz", "burn": [{ "card": "quartz", "foil": true }] }),
+    )
+    .await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("roulette_foil")), "foils never burn");
+    assert_eq!(owned(&app, &cookie).await["quartz"], (102, 1), "nothing was spent");
 
     // Many spins: every one must burn its cards, and win (foil) or lose (destroyed)
     give(&ctx, uid, "diamond", None, 40).await;
