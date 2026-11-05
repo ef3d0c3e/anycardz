@@ -100,6 +100,8 @@ jobs:
         working-directory: frontend
         env:
           CI: '1'
+          # Production build instead of the dev server: steadier timings
+          E2E_BUILD: '1'
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

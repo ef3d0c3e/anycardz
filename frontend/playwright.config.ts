@@ -35,9 +35,14 @@ export default defineConfig({
 			timeout: 300_000
 		},
 		{
-			command: 'npm run dev -- --port 5173 --strictPort',
+			// E2E_BUILD=1 (CI) tests the production build: no on-demand compiling,
+			// so timing checks hold on slow machines
+			command: process.env.E2E_BUILD
+				? 'npm run build && npm run preview -- --port 5173 --strictPort'
+				: 'npm run dev -- --port 5173 --strictPort',
 			url: 'http://localhost:5173/login',
-			reuseExistingServer: true
+			reuseExistingServer: true,
+			timeout: 180_000
 		}
 	]
 });
