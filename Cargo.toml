@@ -1,3 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["backend"]
+
+# Dependencies are built optimized even in debug builds: image resizing and
+# Argon2 are many times slower unoptimized (thumbnails, tests, browser tests)
+[profile.dev.package."*"]
+opt-level = 2
