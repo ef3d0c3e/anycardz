@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { artUrl, assetUrl } from '#lib/api.ts';
+	import { artSrcset, artUrl, assetUrl } from '#lib/api.ts';
 	import { tilt as tiltAction } from '#lib/actions/tilt.ts';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getCatalog } from '#lib/session.svelte.ts';
@@ -44,8 +44,12 @@
 		<div class="cf">
 			<div class="c-top"><span>{setName}</span><span>{pad3(card.number)}/{card.total}</span></div>
 			<div class="c-art">
+				<!-- A fixed hint: cards in grids are about 160px wide, a large one about 300px.
+				     ("auto" re-picks the biggest file for images leaving the page in Chrome) -->
 				<img
 					src={artUrl(card.slug, large ? 840 : 420)}
+					srcset={artSrcset(card.slug, large)}
+					sizes={large ? '300px' : '160px'}
 					alt=""
 					draggable="false"
 					loading={eager ? 'eager' : 'lazy'}

@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
 	import { getCatalog, getSession, getToasts } from '#lib/session.svelte.ts';
-	import { api, artUrl, post } from '#lib/api.ts';
+	import { api, artSrcset, post } from '#lib/api.ts';
 	import { arp, burst, reducedMotion, sleep, tone } from '#lib/fx.ts';
 	import { tilt } from '#lib/actions/tilt.ts';
 	import {
@@ -204,9 +204,14 @@
 			const card = bySlug.get(p.card);
 			return card ? [{ card, foil: p.foil, isNew: p.is_new, copies: p.copies }] : [];
 		});
-		// The won cards' artwork, so it is there when the reel stops
-		for (const p of pulled) new Image().src = artUrl(p.card.slug, 840);
 		mode = pickMode();
+		// The won cards' artwork, so it is there when the reel stops: the same
+		// size the cards will pick, big one by one, small all at once
+		for (const p of pulled) {
+			const img = new Image();
+			img.sizes = mode === 'one' ? '300px' : '160px';
+			img.srcset = artSrcset(p.card.slug, mode === 'one');
+		}
 		size(mode);
 		await runReels();
 	}

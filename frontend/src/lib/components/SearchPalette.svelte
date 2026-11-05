@@ -75,7 +75,7 @@
 					label: c.title,
 					sub: `${i18n.t(`card.${c.rarity}`)} · #${c.number}`,
 					href: `/binder?set=${c.collection}&card=${c.slug}`,
-					img: artUrl(c.slug)
+					img: artUrl(c.slug, 96)
 				})),
 				...r.collections.map((c): Hit => ({
 					group: 'sets',

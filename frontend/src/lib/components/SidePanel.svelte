@@ -113,7 +113,7 @@
 						class:foil={p.foil}
 						class:legend={p.rarity === 'legendary'}
 					>
-						<span class="thumb"><img src={artUrl(p.card)} alt="" loading="lazy" /></span>
+						<span class="thumb"><img src={artUrl(p.card, 96)} alt="" loading="lazy" /></span>
 						<p>
 							{pullLine(p, c?.title ?? p.card)}
 							<small

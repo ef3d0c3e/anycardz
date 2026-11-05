@@ -247,7 +247,7 @@
 										class:rare={c.rarity === 'rare'}
 										class:legend={c.rarity === 'legendary'}
 									>
-										<img src={artUrl(c.slug)} alt="" loading="lazy" />
+										<img src={artUrl(c.slug, 96)} alt="" loading="lazy" />
 										<span class="g-r"></span><span class="g-no">#{pad3(c.number)}</span><span
 											class="g-q">{i18n.t('binder.not_found')}</span
 										>

@@ -35,5 +35,15 @@ export async function api<T>(
 
 export const post = <T>(path: string, json: unknown = {}, f?: Fetch) => api<T>(path, { json }, f);
 
-export const artUrl = (slug: string, width: 420 | 840 = 420) => `/api/cards/${slug}/art?w=${width}`;
+export type ArtWidth = 96 | 240 | 420 | 840;
+export const artUrl = (slug: string, width: ArtWidth = 420) => `/api/cards/${slug}/art?w=${width}`;
+/**
+ * Card art at the sizes the API renders, for the browser to pick by displayed
+ * size. Cards in grids stop at 420 (sharp enough even on 3x screens at their
+ * size); 840 is for a card shown large.
+ */
+export const artSrcset = (slug: string, large = false) =>
+	(large ? ([420, 840] as const) : ([240, 420] as const))
+		.map((w) => `${artUrl(slug, w)} ${w}w`)
+		.join(', ');
 export const assetUrl = (name: string) => `/api/assets/${name}`;

@@ -116,7 +116,7 @@
 				<Card {card} foil={foilOf(owned)} tilt large />
 			{:else}
 				<div class="card ghost r-tag-{card.rarity}">
-					<img src={artUrl(card.slug)} alt="" />
+					<img src={artUrl(card.slug, 96)} alt="" />
 					<span class="g-r"></span><span class="g-no">#{pad3(card.number)}</span><span class="g-q"
 						>{i18n.t('binder.not_found')}</span
 					>
