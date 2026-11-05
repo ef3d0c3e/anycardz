@@ -67,6 +67,7 @@ test('two players seal, a change breaks the seals, then the swap goes through', 
 	expect((await binder(alice))[legendary.slug]).toBe(1);
 	expect((await binder(alice))[common.slug]).toBeUndefined();
 	expect((await binder(bob))[common.slug]).toBe(1);
-	await expect.poll(() => coins(alice)).toBe(1050);
-	await expect.poll(() => coins(bob)).toBe(950);
+	// The 50 coins, plus the first_trade achievement for both
+	await expect.poll(() => coins(alice)).toBe(1050 + 150);
+	await expect.poll(() => coins(bob)).toBe(950 + 150);
 });

@@ -26,13 +26,18 @@ test('completing a set pays, shows in the binder, on the profile and in the live
 
 	await reelMode(page, 'all');
 	await visit(page, '/open');
+	const opened = page.waitForResponse((r) => r.url().endsWith('/api/pile/open'));
 	await tearPack(page);
+	// The set, and what else this pack earned (first pack, first set, maybe more)
+	const unlocked: { key: string; coins: number }[] = (await (await opened).json()).unlocked;
+	expect(unlocked.map((u) => u.key)).toContain('set:desserts');
+	const paid = unlocked.reduce((n, u) => n + u.coins, 0);
 	await expect(page.getByText('Set complete: Sweet Desserts').first()).toBeVisible({
 		timeout: 10_000
 	});
 	await expect
 		.poll(async () => (await (await page.request.get('/api/me')).json()).coins)
-		.toBe(1000 - 250 + set.set_reward);
+		.toBe(1000 - 250 + paid);
 
 	await visit(page, '/binder?set=desserts');
 	await expect(page.getByText('✓ Set complete')).toBeVisible();
