@@ -6,7 +6,7 @@ Trading card game: buy boosters, tear them open, fill your binder. Rewrite of th
 - `frontend/`: SvelteKit 3 app (adapter-node, SSR)
 - Card data lives in a separate repository, [anycardz-data](../anycardz-data), read from `ANYCARDZ_DATA`
 
-Plan, architecture and tickets are in Lific, project `AC` (see AGENTS.md).
+Plan, architecture and tickets are in Lific, project `AC`.
 
 ## Getting started
 
