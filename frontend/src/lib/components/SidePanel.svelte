@@ -64,7 +64,13 @@
 		}
 	}
 	const who = (u: string) => (u === session.username ? i18n.t('live.you') : u);
+	const mine = (u: string) => u === session.username;
 	const verb = { pack: 'live.pulled', tradeup: 'live.forged', roulette: 'live.foiled' } as const;
+	/** "pwm pulled X", or "You pulled X": the viewer's own lines are second person */
+	const pullLine = (p: { source: keyof typeof verb; user: string }, card: string) =>
+		mine(p.user)
+			? i18n.t(`${verb[p.source]}_you`, { card })
+			: i18n.t(verb[p.source], { user: p.user, card });
 </script>
 
 <div class="panel">
@@ -96,7 +102,7 @@
 					<li class="pull feat">
 						<span class="thumb medal" aria-hidden="true">★</span>
 						<p>
-							<a href={featHref(p.key)}>{featLine(i18n, catalog, p.key, who(p.user))}</a>
+							<a href={featHref(p.key)}>{featLine(i18n, catalog, p.key, p.user, mine(p.user))}</a>
 							<small><time datetime={p.at}>{ago(p.at, i18n.lang, now)}</time></small>
 						</p>
 					</li>
@@ -109,7 +115,7 @@
 					>
 						<span class="thumb"><img src={artUrl(p.card)} alt="" loading="lazy" /></span>
 						<p>
-							{i18n.t(verb[p.source], { user: who(p.user), card: c?.title ?? p.card })}
+							{pullLine(p, c?.title ?? p.card)}
 							<small
 								>{i18n.t(`card.${p.rarity}`)}{p.foil ? ` · ${i18n.t('card.foil')}` : ''} ·
 								<time datetime={p.at}>{ago(p.at, i18n.lang, now)}</time></small

@@ -17,16 +17,22 @@ export function featName(i18n: I18n, catalog: CatalogState | undefined, key: str
 	return kind === 'foilset' ? i18n.t('feat.foil_set_name', { set }) : set;
 }
 
-/** One line telling what someone earned, for the live feed and notifications */
+/**
+ * One line telling what someone earned, for the live feed and notifications.
+ * `user` is who did it; `you` says it was the viewer, with its own wording
+ * ("Tu as complété…", not a name in the third person).
+ */
 export function featLine(
 	i18n: I18n,
 	catalog: CatalogState | undefined,
 	key: string,
-	user?: string
+	user?: string,
+	you = false
 ): string {
 	const { kind } = parseKey(key);
 	const name = featName(i18n, catalog, key);
 	const what = kind === 'other' ? 'feat.achievement' : 'feat.completed';
+	if (you) return i18n.t(`${what}_you`, { name });
 	return user ? i18n.t(`${what}_by`, { user, name }) : i18n.t(what, { name });
 }
 
