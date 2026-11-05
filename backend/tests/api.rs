@@ -1536,3 +1536,139 @@ async fn leaderboards_rank_players_and_place_the_caller() {
     assert_eq!((s, err["error"].as_str()), (422, Some("board_all_time_only")));
     assert_eq!(get(&app, "/api/leaderboards?board=nope", &a).await.0, 400);
 }
+
+#[actix_web::test]
+async fn market_escrows_sells_and_withdraws() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, _)) = pair(&app).await;
+    give(&ctx, a_id, "quartz", None, 2).await;
+    give(&ctx, a_id, "diamond", Some("foil1"), 1).await;
+
+    // Prices: from the shop's sell price (10 for a common) to ten times it
+    for price in [9, 101] {
+        let (s, err) = post(&app, "/api/market", &a, json!({ "card": "quartz", "price": price })).await;
+        assert_eq!((s, err["error"].as_str()), (422, Some("market_price")));
+    }
+    let (s, l) = post(&app, "/api/market", &a, json!({ "card": "quartz", "price": 50 })).await;
+    assert_eq!(s, 201, "{l}");
+    assert_eq!((l["remaining"].as_i64(), l["listing"]["mine"].as_bool()), (Some(1), Some(true)));
+    let id = l["listing"]["id"].as_i64().unwrap();
+
+    // The listed copy left the binder: only the other one can be sold
+    assert_eq!(owned(&app, &a).await.get("quartz"), Some(&(1, 0)));
+    assert_eq!(post(&app, "/api/binder/sell", &a, json!({ "card": "quartz" })).await.0, 200);
+    let (s, err) = post(&app, "/api/binder/sell", &a, json!({ "card": "quartz" })).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("not_owned")));
+
+    // Others find it; the seller does not see their own in the market
+    let (_, m) = get(&app, "/api/market?q=QUA", &b).await;
+    let found = m["items"].as_array().unwrap().iter().find(|i| i["id"] == id).expect("listed").clone();
+    assert_eq!((found["price"].as_i64(), found["seller"].as_str()), (Some(50), Some(a_name.as_str())));
+    assert_eq!(found["card"]["rarity"], "common");
+    let (_, m) = get(&app, "/api/market?card=quartz&foil=false&rarity=common", &a).await;
+    assert!(!m["items"].as_array().unwrap().iter().any(|i| i["id"] == id));
+    let (s, err) = post(&app, &format!("/api/market/{id}/buy"), &a, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("market_own")));
+
+    let (s, bought) = post(&app, &format!("/api/market/{id}/buy"), &b, json!({})).await;
+    assert_eq!(s, 200, "{bought}");
+    assert_eq!(bought["coins"], 950);
+    assert_eq!(owned(&app, &b).await.get("quartz"), Some(&(1, 0)));
+    let (s, err) = post(&app, &format!("/api/market/{id}/buy"), &b, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("listing_gone")));
+    // 50 less a 3 coin fee, the 10 from the shop sale, and the first_sale achievement
+    assert_eq!(get(&app, "/api/me", &a).await.1["coins"], 1000 + 10 + 47 + 100);
+    let (_, n) = get(&app, "/api/notifications", &a).await;
+    let sold = n["items"].as_array().unwrap().iter().find(|i| i["kind"] == "market_sold").expect("told").clone();
+    assert_eq!(sold["actor"], b_name.as_str());
+    let detail: Value = serde_json::from_str(sold["detail"].as_str().unwrap()).unwrap();
+    assert_eq!(detail, json!({ "card": "quartz", "foil": false, "price": 50, "net": 47 }));
+
+    // A withdrawn foil comes back with its pattern
+    let (s, l) = post(&app, "/api/market", &a, json!({ "card": "diamond", "foil": true, "price": 499 })).await;
+    assert_eq!((s, l["error"].as_str()), (422, Some("market_price")), "a legendary foil starts at 500");
+    let (_, l) = post(&app, "/api/market", &a, json!({ "card": "diamond", "foil": true, "price": 900 })).await;
+    let foil_id = l["listing"]["id"].as_i64().unwrap();
+    assert_eq!(l["listing"]["foil"], "foil1");
+    assert!(!owned(&app, &a).await.contains_key("diamond"));
+    let (_, mine) = get(&app, "/api/market/mine", &a).await;
+    assert_eq!(mine["open"].as_array().unwrap().len(), 1);
+    assert_eq!(mine["sold"][0]["buyer"], b_name.as_str());
+    assert_eq!(mine["sold"][0]["fee"], 3);
+    assert_eq!(del(&app, &format!("/api/market/{foil_id}"), &b).await.0, 404, "only the seller withdraws");
+    assert_eq!(del(&app, &format!("/api/market/{foil_id}"), &a).await.0, 204);
+    assert_eq!(del(&app, &format!("/api/market/{foil_id}"), &a).await.0, 404);
+    let (_, bb) = get(&app, "/api/binder", &a).await;
+    let diamond = bb["cards"].as_array().unwrap().iter().find(|c| c["card"] == "diamond").unwrap().clone();
+    assert_eq!(diamond["patterns"], json!(["foil1"]));
+    assert_eq!(get(&app, "/api/market/mine", &a).await.1["open"], json!([]));
+
+    // The export holds both sides
+    let (_, export) = get(&app, "/api/account/export", &a).await;
+    assert_eq!(export["market"].as_array().unwrap().len(), 2);
+    assert_eq!(export["market"][0]["other_player"], b_name.as_str());
+}
+
+#[actix_web::test]
+async fn market_limits_coin_moves_and_races() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, _)) = pair(&app).await;
+    give(&ctx, a_id, "mica", None, 21).await;
+    let mut ids = Vec::new();
+    for _ in 0..20 {
+        let (s, l) = post(&app, "/api/market", &a, json!({ "card": "mica", "price": 10 })).await;
+        assert_eq!(s, 201, "{l}");
+        ids.push(l["listing"]["id"].as_i64().unwrap());
+    }
+    let (s, err) = post(&app, "/api/market", &a, json!({ "card": "mica", "price": 10 })).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("market_full")));
+
+    // Two buyers race for one listing: one gets it
+    let c = register(&app, &unique("carol")).await;
+    let (r1, _) = futures_util::future::join(
+        post(&app, &format!("/api/market/{}/buy", ids[0]), &b, json!({})),
+        post(&app, &format!("/api/market/{}/buy", ids[0]), &c, json!({})),
+    )
+    .await;
+    let r1_ok = r1.0 == 200;
+    assert_eq!(get(&app, "/api/market/mine", &a).await.1["sold"].as_array().unwrap().len(), 1);
+    let race = futures_util::future::join(
+        post(&app, &format!("/api/market/{}/buy", ids[1]), &b, json!({})),
+        post(&app, &format!("/api/market/{}/buy", ids[1]), &c, json!({})),
+    )
+    .await;
+    assert_eq!([race.0.0, race.1.0].iter().filter(|s| **s == 200).count(), 1);
+    assert!([race.0.clone(), race.1.clone()].iter().any(|(s, e)| *s == 409 && e["error"] == "listing_gone"));
+
+    // Three purchases a day from one seller
+    let b_bought = usize::from(r1_ok) + usize::from(race.0.0 == 200);
+    for id in &ids[2..2 + (3 - b_bought)] {
+        assert_eq!(post(&app, &format!("/api/market/{id}/buy"), &b, json!({})).await.0, 200);
+    }
+    let (s, err) = post(&app, &format!("/api/market/{}/buy", ids[10]), &b, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("market_seller_limit")));
+
+    // Not enough coins: nothing moves
+    set_user(&ctx, &c_name_of(&app, &c).await, "coins = 5").await;
+    let (s, err) = post(&app, &format!("/api/market/{}/buy", ids[11]), &c, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("not_enough_coins")));
+    let (_, mine) = get(&app, "/api/market/mine", &a).await;
+    assert!(mine["open"].as_array().unwrap().iter().any(|l| l["id"] == ids[11]));
+
+    // Blocked players neither see nor buy each other's listings
+    post(&app, &format!("/api/blocks/{a_name}"), &b, json!({})).await;
+    let (_, m) = get(&app, "/api/market?card=mica&sort=new", &b).await;
+    assert!(!m["items"].as_array().unwrap().iter().any(|i| i["seller"] == a_name.as_str()));
+    let (s, err) = post(&app, &format!("/api/market/{}/buy", ids[12]), &b, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("player_unavailable")));
+    let _ = b_name;
+}
+
+async fn c_name_of<S>(app: &S, cookie: &Cookie<'static>) -> String
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    get(app, "/api/me", cookie).await.1["username"].as_str().unwrap().to_owned()
+}
