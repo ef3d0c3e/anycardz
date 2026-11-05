@@ -1,0 +1,22 @@
+id = 1
+tags = ["mineral"]
+color-primary = "#a99be0"
+color-secondary = "#261f4a"
+
+[[cards]]
+name = "quartz"
+
+[[cards]]
+name = "mica"
+
+[[cards]]
+name = "feldspar"
+
+[[cards]]
+name = "garnet"
+
+[[cards]]
+name = "opal"
+
+[[cards]]
+name = "diamond"

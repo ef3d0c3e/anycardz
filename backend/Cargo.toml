@@ -1,0 +1,45 @@
+[package]
+name = "anycardz-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "anycardz-api"
+path = "src/main.rs"
+
+[dependencies]
+actix-files = "0.6"
+actix-web = { version = "4", default-features = false, features = ["macros", "cookies", "compress-gzip"] }
+anyhow = "1"
+argon2 = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "chrono", "with-deprecated"] }
+diesel-async = { version = "0.9", features = ["postgres", "deadpool", "migrations"] }
+diesel_migrations = "2.3"
+dotenvy = "0.15"
+futures-util = { version = "0.3", default-features = false }
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-actix-web = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+# Exposes test_support to integration tests
+test-support = []
+
+[dev-dependencies]
+tempfile = "3"
+actix-http = "3"
+anycardz-api = { path = ".", features = ["test-support"] }

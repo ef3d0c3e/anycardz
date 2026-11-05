@@ -1,0 +1,27 @@
+use std::path::PathBuf;
+
+use anyhow::Context;
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub database_url: String,
+    pub data_dir: PathBuf,
+    pub cache_dir: PathBuf,
+    pub bind: String,
+    pub dev_collections: bool,
+    pub secure_cookies: bool,
+}
+
+impl Config {
+    pub fn from_env() -> anyhow::Result<Config> {
+        let flag = |name: &str| std::env::var(name).is_ok_and(|v| v == "1" || v == "true");
+        Ok(Config {
+            database_url: std::env::var("DATABASE_URL").context("DATABASE_URL is not set")?,
+            data_dir: std::env::var("ANYCARDZ_DATA").context("ANYCARDZ_DATA is not set")?.into(),
+            cache_dir: std::env::var("ANYCARDZ_CACHE").unwrap_or_else(|_| "backend/cache".into()).into(),
+            bind: std::env::var("ANYCARDZ_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into()),
+            dev_collections: flag("ANYCARDZ_DEV_COLLECTIONS"),
+            secure_cookies: flag("ANYCARDZ_SECURE_COOKIES"),
+        })
+    }
+}
