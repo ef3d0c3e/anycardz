@@ -36,11 +36,14 @@ async fn ctx() -> Option<Ctx> {
         dev_collections: false,
         secure_cookies: false,
         trusted_proxies: Vec::new(),
+        metrics_bind: None,
+        metrics_token: None,
     };
     let catalog = Catalog::load(&config.data_dir, false).unwrap();
     let state = AppState {
         pool: db::pool(&url).unwrap(),
         live: Default::default(),
+        metrics: Default::default(),
         limits: anycardz_api::ratelimit::AuthLimits::relaxed(),
         catalog: Arc::new(catalog),
         config: Arc::new(config),
@@ -962,6 +965,7 @@ async fn auth_rate_limits() {
     let state = web::Data::new(AppState {
         pool: ctx.state.pool.clone(),
         live: Default::default(),
+        metrics: Default::default(),
         limits: Default::default(),
         catalog: ctx.state.catalog.clone(),
         config: ctx.state.config.clone(),
@@ -1010,4 +1014,62 @@ async fn auth_rate_limits() {
     let b = body(res).await;
     assert_eq!(b["error"], "too_many_attempts");
     assert!((1..=60).contains(&b["retry_after"].as_u64().unwrap()));
+}
+
+#[actix_web::test]
+async fn metrics_count_requests_and_game_events() {
+    let Some(ctx) = ctx().await else { return };
+    // A state of its own: counters start at zero, and the scrape wants a token
+    let mut config = (*ctx.state.config).clone();
+    config.metrics_token = Some("s3cret".into());
+    let state = web::Data::new(AppState {
+        pool: ctx.state.pool.clone(),
+        live: Default::default(),
+        metrics: Default::default(),
+        limits: anycardz_api::ratelimit::AuthLimits::relaxed(),
+        catalog: ctx.state.catalog.clone(),
+        config: Arc::new(config),
+    });
+    let app = test::init_service(
+        App::new()
+            .app_data(state.clone())
+            .wrap(actix_web::middleware::from_fn(anycardz_api::metrics::track))
+            .configure(routes::configure),
+    )
+    .await;
+    let scraper = test::init_service(App::new().app_data(state).service(anycardz_api::metrics::scrape)).await;
+
+    let cookie = register(&app, &unique("metric")).await;
+    post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
+    let (status, _) = post(&app, "/api/pile/open", &cookie, json!({})).await;
+    assert_eq!(status, 200);
+    get(&app, "/api/trades/999999999", &cookie).await;
+    get(&app, "/api/no/such/path/42", &cookie).await;
+
+    let res = test::call_service(&scraper, test::TestRequest::get().uri("/metrics").to_request()).await;
+    assert_eq!(res.status(), 401, "no token");
+    let req = test::TestRequest::get().uri("/metrics").insert_header(("authorization", "Bearer wrong")).to_request();
+    assert_eq!(test::call_service(&scraper, req).await.status(), 401);
+    let req = test::TestRequest::get().uri("/metrics").insert_header(("authorization", "Bearer s3cret")).to_request();
+    let res = test::call_service(&scraper, req).await;
+    assert_eq!(res.status(), 200);
+    let text = String::from_utf8(test::read_body(res).await.to_vec()).unwrap();
+    let has = |line: &str| assert!(text.contains(line), "missing {line} in:\n{text}");
+    has(r#"anycardz_auth_attempts_total{action="register",result="ok"} 1"#);
+    has(r#"anycardz_boosters_bought_total{collection="minerals"} 1"#);
+    has(r#"anycardz_boosters_opened_total{collection="minerals"} 1"#);
+    has(r#"anycardz_coins_spent_total{reason="booster"} 250"#);
+    has(r#"anycardz_coins_earned_total{reason="signup"} 1000"#);
+    has(r#"anycardz_http_requests_total{method="POST",route="/api/pile/open",status="200"} 1"#);
+    // Paths are grouped by route pattern; unknown ones share a single label
+    has(r#"route="/api/trades/{id}",status="404"} 1"#);
+    has(r#"anycardz_http_requests_total{method="GET",route="unmatched",status="404"} 1"#);
+    has("anycardz_users ");
+    has("anycardz_db_pool_connections ");
+    let pulled: u64 = text
+        .lines()
+        .filter(|l| l.starts_with("anycardz_cards_obtained_total{source=\"pack\""))
+        .map(|l| l.rsplit(' ').next().unwrap().parse::<u64>().unwrap())
+        .sum();
+    assert_eq!(pulled, 5, "one pack, five cards");
 }
