@@ -104,6 +104,8 @@ struct ProfileDto {
     /// Most complete collections first
     collections: Vec<CollectionStat>,
     relation: &'static str,
+    /// Completed sets and achievements, newest first
+    achievements: Vec<crate::progress::EarnedDto>,
 }
 
 #[get("/players/{name}")]
@@ -154,6 +156,7 @@ pub async fn get_profile(
         foils: rows.iter().map(|r| r.2).sum(),
         collections,
         relation,
+        achievements: crate::progress::earned(&mut conn, id).await?,
     }))
 }
 

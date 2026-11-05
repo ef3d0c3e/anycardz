@@ -325,8 +325,11 @@ pub async fn open_booster(
             at: chrono::Utc::now(),
         });
     }
+    let unlocked =
+        crate::progress::cards_gained(&state, uid, &user.username, cards.iter().map(|c| c.card.as_str())).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "collection": collection, "cards": cards, "pile": pile, "pity_left": game::pity_left(dry),
+        "unlocked": unlocked,
     })))
 }
 
@@ -438,7 +441,11 @@ pub async fn get_binder(
             .map(|c| (c.slug.as_str(), crate::routes::catalog::CardDto::new(&state.catalog, c, lang)))
             .collect()
     });
-    Ok(HttpResponse::Ok().json(serde_json::json!({ "cards": cards, "collections": collections, "details": details })))
+    let achievements: Vec<String> =
+        crate::progress::earned(&mut conn, user.id).await?.into_iter().map(|e| e.key).collect();
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "cards": cards, "collections": collections, "details": details, "achievements": achievements,
+    })))
 }
 
 #[derive(Deserialize)]

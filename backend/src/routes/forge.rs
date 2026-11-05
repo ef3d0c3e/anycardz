@@ -90,8 +90,10 @@ pub async fn tradeup(
         at: chrono::Utc::now(),
     });
     state.metrics.card("tradeup", target, false);
+    let unlocked = crate::progress::cards_gained(&state, uid, &user.username, [won.as_str()]).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "card": won, "rarity": target, "collection": rng_collection, "is_new": is_new, "copies": copies, "odds": odds,
+        "unlocked": unlocked,
     })))
 }
 
@@ -167,7 +169,11 @@ pub async fn roulette(
             at: chrono::Utc::now(),
         });
     }
+    let unlocked = match won {
+        Some(_) => crate::progress::cards_gained(&state, user.id, &user.username, [target.as_str()]).await?,
+        None => Vec::new(),
+    };
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "won": won.is_some(), "foil": won, "chance": chance, "burned": burned.len(),
+        "won": won.is_some(), "foil": won, "chance": chance, "burned": burned.len(), "unlocked": unlocked,
     })))
 }

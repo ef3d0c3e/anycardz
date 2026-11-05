@@ -461,6 +461,18 @@ pub async fn seal_trade(
     let kind = if t.state == "done" { Kind::TradeDone } else { Kind::TradeSealed };
     if t.state == "done" {
         state.metrics.trade("done");
+        // Each player may have just completed a set with what they received
+        let ls = lines(&mut conn, t.id).await?;
+        let names: Vec<(i64, String)> = crate::schema::users::table
+            .filter(crate::schema::users::id.eq_any([t.from_id, t.to_id]))
+            .select((crate::schema::users::id, crate::schema::users::username))
+            .load(&mut conn)
+            .await?;
+        for (receiver, given_by) in [(t.to_id, "from"), (t.from_id, "to")] {
+            let Some((_, name)) = names.iter().find(|(id, _)| *id == receiver) else { continue };
+            let got = ls.iter().filter(|l| l.side == given_by).map(|l| l.card.as_str());
+            crate::progress::cards_gained(&state, receiver, name, got).await?;
+        }
     }
     notify(&state, &mut conn, t.partner(uid), kind, uid, Some(t.id)).await?;
     Ok(HttpResponse::Ok().json(dto(&mut conn, &state.catalog, lang, t, uid).await?))

@@ -42,10 +42,20 @@ pub struct ChatEvent {
     pub at: DateTime<Utc>,
 }
 
+/// A player completed a set or earned an achievement
+#[derive(Debug, Clone, Serialize)]
+pub struct FeatEvent {
+    pub user: String,
+    /// `set:<slug>`, `foilset:<slug>`, or an achievement id
+    pub key: String,
+    pub at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Event {
     Pull(PullEvent),
+    Feat(FeatEvent),
     Chat(ChatEvent),
     /// Something changed in a trade: its players refetch it
     Trade {
@@ -104,6 +114,10 @@ impl Hub {
             pulls.truncate(RECENT_PULLS);
         }
         self.send(None, &Event::Pull(event));
+    }
+
+    pub fn feat(&self, event: FeatEvent) {
+        self.send(None, &Event::Feat(event));
     }
 
     pub fn chat(&self, event: ChatEvent) {

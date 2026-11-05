@@ -59,6 +59,9 @@ pub struct CollectionDto<'a> {
     pub price: i64,
     /// Cards per rarity, e.g. whether a trade-up into this collection can pay out
     pub rarities: std::collections::BTreeMap<Rarity, usize>,
+    /// Coins for owning every card of the set, and every one as a foil
+    pub set_reward: i64,
+    pub foil_set_reward: i64,
     pub featured: CardDto<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cards: Option<Vec<CardDto<'a>>>,
@@ -76,6 +79,8 @@ impl<'a> CollectionDto<'a> {
             total: c.cards.len(),
             price: BOOSTER_PRICE,
             rarities: catalog.pool(c).into_iter().map(|(r, cards)| (r, cards.len())).collect(),
+            set_reward: crate::progress::set_reward(c.cards.len()),
+            foil_set_reward: crate::progress::foil_set_reward(c.cards.len()),
             featured: CardDto::new(catalog, &catalog.cards[&c.featured], lang),
             cards: with_cards.then(|| c.cards.iter().map(|s| CardDto::new(catalog, &catalog.cards[s], lang)).collect()),
         }

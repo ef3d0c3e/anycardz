@@ -23,6 +23,8 @@ pub enum Kind {
     TradeSealed,
     TradeDone,
     TradeCancelled,
+    /// A set completed or an achievement earned; the key is in `detail`
+    Achievement,
 }
 
 impl Kind {
@@ -35,6 +37,7 @@ impl Kind {
             Kind::TradeSealed => "trade_sealed",
             Kind::TradeDone => "trade_done",
             Kind::TradeCancelled => "trade_cancelled",
+            Kind::Achievement => "achievement",
         }
     }
 }
@@ -46,11 +49,13 @@ struct NotificationDto {
     actor: Option<String>,
     actor_avatar: Option<String>,
     trade: Option<i64>,
+    /// The achievement key, for kind "achievement"
+    detail: Option<String>,
     read: bool,
     at: DateTime<Utc>,
 }
 
-type Row = (i64, String, Option<i64>, Option<i64>, Option<DateTime<Utc>>, DateTime<Utc>);
+type Row = (i64, String, Option<i64>, Option<i64>, Option<String>, Option<DateTime<Utc>>, DateTime<Utc>);
 
 async fn dtos(conn: &mut AsyncPgConnection, rows: Vec<Row>) -> ApiResult<Vec<NotificationDto>> {
     let actors: Vec<i64> = rows.iter().filter_map(|r| r.2).collect();
@@ -64,7 +69,7 @@ async fn dtos(conn: &mut AsyncPgConnection, rows: Vec<Row>) -> ApiResult<Vec<Not
         .collect();
     Ok(rows
         .into_iter()
-        .map(|(id, kind, actor, trade, read_at, at)| {
+        .map(|(id, kind, actor, trade, detail, read_at, at)| {
             let a = actor.and_then(|a| names.get(&a));
             NotificationDto {
                 id,
@@ -72,6 +77,7 @@ async fn dtos(conn: &mut AsyncPgConnection, rows: Vec<Row>) -> ApiResult<Vec<Not
                 actor: a.map(|(n, _, _)| n.clone()),
                 actor_avatar: a.and_then(|(n, v, has)| avatar_url(n, *v, *has)),
                 trade,
+                detail,
                 read: read_at.is_some(),
                 at,
             }
@@ -121,7 +127,24 @@ pub async fn notify(
                 .await?
         }
     };
-    let row: Row = (id, kind.as_str().to_owned(), Some(actor), trade, None, now);
+    let row: Row = (id, kind.as_str().to_owned(), Some(actor), trade, None, None, now);
+    let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
+    Ok(())
+}
+
+/// Tells `user` they earned the achievement `key`
+pub async fn achievement(state: &AppState, conn: &mut AsyncPgConnection, user: i64, key: &str) -> ApiResult<()> {
+    let (id, at): (i64, DateTime<Utc>) = diesel::insert_into(notifications::table)
+        .values((
+            notifications::user_id.eq(user),
+            notifications::kind.eq(Kind::Achievement.as_str()),
+            notifications::detail.eq(key),
+        ))
+        .returning((notifications::id, notifications::created_at))
+        .get_result(conn)
+        .await?;
+    let row: Row = (id, Kind::Achievement.as_str().to_owned(), None, None, Some(key.to_owned()), None, at);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
     state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())
@@ -148,6 +171,7 @@ pub async fn list(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<Ht
             notifications::kind,
             notifications::actor_id,
             notifications::trade_id,
+            notifications::detail,
             notifications::read_at,
             notifications::created_at,
         ))

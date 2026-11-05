@@ -63,6 +63,11 @@ struct ResultLabels {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+struct KindLabels {
+    kind: &'static str,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct AuthLabels {
     /// login, register
     action: &'static str,
@@ -92,6 +97,7 @@ pub struct Metrics {
     auth: Family<AuthLabels, Counter>,
     shouts: Counter,
     free_packs: Counter,
+    achievements: Family<KindLabels, Counter>,
     sockets: Gauge,
     online: Gauge,
     users: Gauge,
@@ -124,6 +130,7 @@ impl Default for Metrics {
             auth: Default::default(),
             shouts: Default::default(),
             free_packs: Default::default(),
+            achievements: Default::default(),
             sockets: Default::default(),
             online: Default::default(),
             users: Default::default(),
@@ -142,6 +149,7 @@ impl Default for Metrics {
         r.register("trades", "Trades ended, by result (done, cancelled)", m.trades.clone());
         r.register("auth_attempts", "Logins and sign-ups, by result", m.auth.clone());
         r.register("shouts", "Shoutbox messages posted", m.shouts.clone());
+        r.register("achievements", "Achievements earned, by kind (set, foil_set, ...)", m.achievements.clone());
         r.register("free_pack_claims", "Free pack claims (each gives several packs)", m.free_packs.clone());
         r.register("live_sockets", "Open live sockets", m.sockets.clone());
         r.register("online_users", "Players with a live socket open", m.online.clone());
@@ -192,6 +200,10 @@ impl Metrics {
 
     pub fn shout(&self) {
         self.shouts.inc();
+    }
+
+    pub fn achievement(&self, kind: &'static str) {
+        self.achievements.get_or_create(&KindLabels { kind }).inc();
     }
 
     pub fn free_packs(&self) {

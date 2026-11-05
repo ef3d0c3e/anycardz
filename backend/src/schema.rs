@@ -132,12 +132,22 @@ diesel::table! {
         kind -> Text,
         actor_id -> Nullable<Int8>,
         trade_id -> Nullable<Int8>,
+        detail -> Nullable<Text>,
         read_at -> Nullable<Timestamptz>,
         created_at -> Timestamptz,
     }
 }
 
+diesel::table! {
+    achievements (user_id, key) {
+        user_id -> Int8,
+        key -> Text,
+        coins -> Int8,
+        created_at -> Timestamptz,
+    }
+}
 diesel::joinable!(shout_messages -> users (user_id));
+diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(trade_lines -> trades (trade_id));
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(topups -> users (user_id));
@@ -158,4 +168,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     friendships,
     blocks,
     notifications,
+    achievements,
 );

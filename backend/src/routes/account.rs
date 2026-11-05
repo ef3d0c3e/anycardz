@@ -266,6 +266,8 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         .load(conn)
         .await?;
 
+    let earned = crate::progress::earned(conn, uid).await?;
+
     let mut others: Vec<i64> = friends.iter().flat_map(|f| [f.0, f.1]).collect();
     others.extend(blocked.iter().map(|b| b.0));
     others.extend(my_trades.iter().flat_map(|t| [t.1, t.2]));
@@ -311,6 +313,7 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
                 "updated_at": updated,
             })
         }).collect::<Vec<_>>(),
+        "achievements": earned,
         "notifications": notes.iter().map(|(kind, actor, trade, read, at)| json!({
             "kind": kind, "from": actor.map(name), "trade": trade, "read_at": read, "at": at,
         })).collect::<Vec<_>>(),
