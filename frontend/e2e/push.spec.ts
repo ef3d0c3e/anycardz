@@ -17,6 +17,9 @@ test('turning push on subscribes the browser and tells the server', async ({ pag
 	await context.grantPermissions(['notifications']);
 	// Headless browsers reach no push service: the Push API answers with a made up subscription
 	await page.addInitScript(() => {
+		// Some headless builds report notifications as denied whatever was granted
+		Object.defineProperty(Notification, 'permission', { get: () => 'granted' });
+		Notification.requestPermission = async () => 'granted';
 		let sub: object | null = null;
 		const fake = {
 			endpoint: 'https://fcm.googleapis.com/fcm/send/e2e',
