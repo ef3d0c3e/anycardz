@@ -48,6 +48,8 @@ cp .env.prod.example .env.prod   # DOMAIN, POSTGRES_PASSWORD, DATA_DIR, OPERATOR
 make prod-up                     # build and start; prod-logs, prod-down
 ```
 
+Push notifications need a VAPID key pair: run `cargo run -p anycardz-api -- vapid-keys` once and put the private key in `VAPID_PRIVATE_KEY` (`.env.prod`). Without it the site runs with push off and Settings says so. Keep the key: a new one silently ends every device's subscription.
+
 To update, `git pull` both repositories and `make prod-up` again. Card data is read at startup, so a data-only change needs `docker compose -f compose.prod.yaml --env-file .env.prod restart api`.
 
 Cookies are `Secure` and the API believes `X-Forwarded-For` only from Caddy's fixed address (`172.30.0.10`, used for the per-address login limits). To try the stack locally over plain HTTP, set `DOMAIN=http://localhost`, `ORIGIN=http://localhost:8088`, `HTTP_PORT=8088` and `SECURE_COOKIES=0`.
@@ -70,6 +72,7 @@ Prometheus and Grafana run elsewhere; the API only exposes metrics. They are ser
 | `anycardz_roulette_spins_total` | `result` (won, lost) | Foil roulette |
 | `anycardz_trades_total` | `result` (done, cancelled) | Trades ended |
 | `anycardz_market_listings_total` | `result` (listed, withdrawn, sold) | Marketplace listing events |
+| `anycardz_push_messages_total` | `result` (sent, gone, failed) | Web Push deliveries; `gone` subscriptions are deleted |
 | `anycardz_market_fees_coins_total` | | Coins taken by the 5% sale fee, gone from the economy |
 | `anycardz_shouts_total` | | Shoutbox messages |
 | `anycardz_live_sockets`, `anycardz_online_users` | | Open live sockets, and players behind them |
@@ -108,6 +111,9 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 12 h; `/me.free_packs` says when |
 | GET    | `/achievements`          | yes  | Every achievement with the player's progress and when it was earned |
 | GET    | `/leaderboards?board=&period=` | yes | `board`: sets, achievements, legendaries, foils, trades, streak; `period`: week or all (streak: all). Top 20 and the caller's rank |
+| GET    | `/push` | yes | `{key, subscribed}`: the VAPID public key (null when push is off) and whether this device is subscribed |
+| PUT    | `/push` | yes | `PushSubscription.toJSON()`: subscribes this device (one per session, removed when it signs out). Known push services only |
+| DELETE | `/push` | yes | Unsubscribes this device |
 | GET    | `/market?q=&card=&collection=&rarity=&foil=&sort=&page=` | yes | Open listings by other players (blocked ones hidden), cheapest first or `sort=new`, 24 a page |
 | GET    | `/market/mine` | yes | The caller's open listings (20 at most) and last 20 sales |
 | POST   | `/market` | yes | `{card, foil, price}`: lists one copy, which leaves the binder. Price from the shop sell price to 10× it |
