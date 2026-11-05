@@ -1,0 +1,20 @@
+# For a host that already runs nginx (or another reverse proxy) on 80/443:
+#   docker compose -f compose.prod.yaml -f deploy/compose.nginx.yaml --env-file .env.prod up -d --build
+# Caddy is left out; the API and the site listen on the host's loopback only,
+# for nginx to proxy to (see deploy/nginx.conf).
+services:
+  caddy:
+    # Never started: no `caddy` profile is ever enabled
+    profiles: [caddy]
+
+  api:
+    environment:
+      # nginx reaches the containers through the network's gateway: its
+      # X-Forwarded-For is the one believed (per-address login limits)
+      ANYCARDZ_TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.30.0.1}
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+
+  web:
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"

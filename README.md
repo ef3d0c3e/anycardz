@@ -32,6 +32,8 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every push: rustfmt, cli
 
 ## Deployment
 
+Step by step guide, with Caddy or behind an existing nginx, backups and monitoring: **[docs/deploy.md](docs/deploy.md)**. In short:
+
 `compose.prod.yaml` runs the whole site behind [Caddy](https://caddyserver.com), which gets the HTTPS certificate and is the only container with published ports:
 
 | Service | What it is |
@@ -52,7 +54,7 @@ Push notifications need a VAPID key pair: run `cargo run -p anycardz-api -- vapi
 
 To update, `git pull` both repositories and `make prod-up` again. Card data is read at startup, so a data-only change needs `docker compose -f compose.prod.yaml --env-file .env.prod restart api`.
 
-Cookies are `Secure` and the API believes `X-Forwarded-For` only from Caddy's fixed address (`172.30.0.10`, used for the per-address login limits). To try the stack locally over plain HTTP, set `DOMAIN=http://localhost`, `ORIGIN=http://localhost:8088`, `HTTP_PORT=8088` and `SECURE_COOKIES=0`.
+Cookies are `Secure` and the API believes `X-Forwarded-For` only from Caddy's fixed address (`172.30.0.10`, used for the per-address login limits). With nginx on the host instead, add `-f deploy/compose.nginx.yaml` and use `deploy/nginx.conf`. To try the stack locally over plain HTTP, set `DOMAIN=http://localhost`, `ORIGIN=http://localhost:8088`, `HTTP_PORT=8088` and `SECURE_COOKIES=0`.
 
 ## Monitoring
 
