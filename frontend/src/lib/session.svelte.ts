@@ -62,6 +62,8 @@ export class CatalogState {
 			secondary: '#ff4fa3',
 			total: all.reduce((n, c) => n + c.total, 0),
 			price: 0,
+			set_reward: 0,
+			foil_set_reward: 0,
 			featured,
 			free: true
 		};

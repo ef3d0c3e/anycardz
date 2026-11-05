@@ -490,6 +490,19 @@ const fr: Partial<Record<Key, string>> = {
 	'errors.free_packs_not_ready': 'Tes packs gratuits ne sont pas encore prêts.',
 	'pity.left_one': 'Légendaire garantie dans ce pack',
 	'pity.left_other': 'Légendaire garantie d’ici {n} packs',
-	'pity.hint': 'Chaque pack sans légendaire rapproche la légendaire garantie.'
+	'pity.hint': 'Chaque pack sans légendaire rapproche la légendaire garantie.',
+
+	'feat.completed': 'Set complété : {name}',
+	'feat.completed_by': '{user} a complété {name}',
+	'feat.achievement': 'Succès : {name}',
+	'feat.achievement_by': '{user} a obtenu {name}',
+	'feat.foil_set_name': '{set} en brillant',
+	'feat.reward_toast': '{name} : +{n} pièces',
+	'binder.reward': 'Complète le set : +{n} pièces',
+	'binder.reward_done': 'Set complété',
+	'binder.foil_reward': 'Set brillant {owned}/{total} : +{n} pièces',
+	'binder.foil_reward_done': 'Set brillant complété',
+	'profile.badges': 'Badges',
+	'profile.no_badges': 'Pas encore de badge.'
 };
 export default fr;

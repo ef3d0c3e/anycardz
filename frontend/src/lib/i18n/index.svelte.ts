@@ -41,6 +41,9 @@ export class I18n {
 		});
 	};
 
+	/** Whether a key exists, for texts picked by a server-given id */
+	has = (key: string) => key in en;
+
 	num = (n: number) => n.toLocaleString(this.lang === 'fr' ? 'fr-FR' : 'en-US');
 
 	/** A calendar date ("2026-11-05" or a full timestamp), in UTC so the server

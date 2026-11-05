@@ -4,9 +4,11 @@
 	import { getSession, getToasts } from '#lib/session.svelte.ts';
 	import { ago, getLive } from '#lib/live.svelte.ts';
 	import { artUrl, post } from '#lib/api.ts';
-	import type { ChatEvent } from '#lib/types.ts';
 	import Card from './Card.svelte';
 	import Avatar from './Avatar.svelte';
+	import { featHref, featLine } from '#lib/progress.ts';
+	import { getCatalog } from '#lib/session.svelte.ts';
+	import type { ChatEvent, FeatEvent, PullEvent } from '#lib/types.ts';
 
 	/** Live pulls and the shoutbox: a column on desktop, a sheet elsewhere */
 	let { onClose }: { onClose?: () => void } = $props();
@@ -14,6 +16,15 @@
 	const live = getLive();
 	const session = getSession();
 	const toasts = getToasts();
+	const catalog = getCatalog();
+	/** Pulls and feats, newest first */
+	type FeedItem = ({ t: 'pull' } & PullEvent) | ({ t: 'feat' } & FeatEvent);
+	const feed = $derived(
+		[
+			...live.pulls.map((p) => ({ t: 'pull' as const, ...p })),
+			...live.feats.map((f) => ({ t: 'feat' as const, ...f }))
+		].sort((a, b) => b.at.localeCompare(a.at)) as FeedItem[]
+	);
 
 	let tab = $state<'pulls' | 'chat'>('pulls');
 	let draft = $state('');
@@ -80,22 +91,32 @@
 
 	{#if tab === 'pulls'}
 		<ul class="pulls" aria-live="polite">
-			{#each live.pulls as p (`${p.at}-${p.user}-${p.card}`)}
-				{@const c = live.cards[p.card]}
-				<li
-					class="pull r-tag-{p.rarity}"
-					class:foil={p.foil}
-					class:legend={p.rarity === 'legendary'}
-				>
-					<span class="thumb"><img src={artUrl(p.card)} alt="" loading="lazy" /></span>
-					<p>
-						{i18n.t(verb[p.source], { user: who(p.user), card: c?.title ?? p.card })}
-						<small
-							>{i18n.t(`card.${p.rarity}`)}{p.foil ? ` · ${i18n.t('card.foil')}` : ''} ·
-							<time datetime={p.at}>{ago(p.at, i18n.lang, now)}</time></small
-						>
-					</p>
-				</li>
+			{#each feed as p (p.t === 'pull' ? `${p.at}-${p.user}-${p.card}` : `${p.at}-${p.user}-${p.key}`)}
+				{#if p.t === 'feat'}
+					<li class="pull feat">
+						<span class="thumb medal" aria-hidden="true">★</span>
+						<p>
+							<a href={featHref(p.key)}>{featLine(i18n, catalog, p.key, who(p.user))}</a>
+							<small><time datetime={p.at}>{ago(p.at, i18n.lang, now)}</time></small>
+						</p>
+					</li>
+				{:else}
+					{@const c = live.cards[p.card]}
+					<li
+						class="pull r-tag-{p.rarity}"
+						class:foil={p.foil}
+						class:legend={p.rarity === 'legendary'}
+					>
+						<span class="thumb"><img src={artUrl(p.card)} alt="" loading="lazy" /></span>
+						<p>
+							{i18n.t(verb[p.source], { user: who(p.user), card: c?.title ?? p.card })}
+							<small
+								>{i18n.t(`card.${p.rarity}`)}{p.foil ? ` · ${i18n.t('card.foil')}` : ''} ·
+								<time datetime={p.at}>{ago(p.at, i18n.lang, now)}</time></small
+							>
+						</p>
+					</li>
+				{/if}
 			{:else}
 				<li class="empty">{i18n.t('live.no_pulls')}</li>
 			{/each}
@@ -149,6 +170,21 @@
 </div>
 
 <style>
+	.feat .medal {
+		display: grid;
+		place-items: center;
+		background: linear-gradient(135deg, #ffcf5c, #f08a24);
+		color: #fff;
+		font-size: 18px;
+	}
+	.feat a {
+		color: inherit;
+		text-decoration: none;
+		font-weight: 600;
+	}
+	.feat a:hover {
+		text-decoration: underline;
+	}
 	.panel {
 		display: flex;
 		flex-direction: column;

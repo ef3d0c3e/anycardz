@@ -7,6 +7,7 @@
 	import { api, post } from '#lib/api.ts';
 	import type { Relation, TradeDto } from '#lib/types.ts';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import { featHref, featName, parseKey } from '#lib/progress.ts';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
@@ -169,6 +170,33 @@
 		</div>
 	</dl>
 
+	<section aria-labelledby="badges">
+		<h2 id="badges">{i18n.t('profile.badges')}</h2>
+		{#if p.achievements.length}
+			<ul class="badges">
+				{#each p.achievements as a (a.key)}
+					{@const k = parseKey(a.key)}
+					{@const col = k.kind === 'other' ? undefined : catalog.get(k.id)}
+					<li>
+						<a
+							class="badge"
+							class:foil={k.kind === 'foilset'}
+							href={featHref(a.key)}
+							style:--cp={col?.primary}
+							style:--cs={col?.secondary}
+							title={i18n.date(a.at)}
+						>
+							<span class="star" aria-hidden="true">★</span>
+							{featName(i18n, catalog, a.key)}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="muted">{i18n.t('profile.no_badges')}</p>
+		{/if}
+	</section>
+
 	<section aria-labelledby="cols">
 		<h2 id="cols">{i18n.t('profile.collections')}</h2>
 		{#if p.collections.length}
@@ -189,6 +217,42 @@
 </div>
 
 <style>
+	.badges {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 12px 6px 6px;
+		border-radius: 999px;
+		color: #fff;
+		font-weight: 700;
+		font-size: 13px;
+		text-decoration: none;
+		background: linear-gradient(120deg, var(--cp, #6d4cff), var(--cs, #ff4fa3));
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+	}
+	.badge.foil {
+		background:
+			linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%),
+			linear-gradient(120deg, var(--cp, #6d4cff), #ffcf5c 55%, var(--cs, #ff4fa3));
+	}
+	.star {
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: rgba(255, 255, 255, 0.25);
+		font-size: 12px;
+	}
 	.screen {
 		display: flex;
 		flex-direction: column;

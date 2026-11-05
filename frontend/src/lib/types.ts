@@ -27,6 +27,9 @@ export interface CollectionDto {
 	cards?: CardDto[];
 	/** The free pack stand-in (slug FREE_PACK), not a real collection */
 	free?: boolean;
+	/** Coins for owning every card of the set, and every one as a foil */
+	set_reward: number;
+	foil_set_reward: number;
 }
 
 export interface StreakDto {
@@ -81,6 +84,24 @@ export interface BinderDto {
 	collections: Record<string, number>;
 	/** With ?details=1 */
 	details?: Record<string, CardDto> | null;
+	/** Earned keys: set:<slug>, foilset:<slug>, achievements */
+	achievements: string[];
+}
+
+/** A set completed or an achievement earned */
+export interface Unlock {
+	key: string;
+	coins: number;
+}
+
+export interface EarnedDto extends Unlock {
+	at: string;
+}
+
+export interface FeatEvent {
+	user: string;
+	key: string;
+	at: string;
 }
 
 export interface PulledDto {
@@ -97,6 +118,7 @@ export interface OpenedDto {
 	pile: string[];
 	/** Packs to the guaranteed legendary after this one */
 	pity_left: number;
+	unlocked: Unlock[];
 }
 
 export interface TradeLine {
@@ -174,6 +196,8 @@ export interface ProfileDto {
 	foils: number;
 	collections: { slug: string; owned: number; total: number }[];
 	relation: Relation;
+	/** Completed sets and achievements, newest first */
+	achievements: EarnedDto[];
 }
 
 export interface FriendDto {
@@ -195,7 +219,8 @@ export type NotificationKind =
 	| 'trade_changed'
 	| 'trade_sealed'
 	| 'trade_done'
-	| 'trade_cancelled';
+	| 'trade_cancelled'
+	| 'achievement';
 
 export interface NotificationDto {
 	id: number;
@@ -203,6 +228,8 @@ export interface NotificationDto {
 	actor: string | null;
 	actor_avatar: string | null;
 	trade: number | null;
+	/** The achievement key, for kind "achievement" */
+	detail: string | null;
 	read: boolean;
 	at: string;
 }

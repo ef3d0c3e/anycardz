@@ -1,10 +1,11 @@
 import { getContext, setContext } from 'svelte';
 import { api } from './api.ts';
-import type { CardDto, ChatEvent, NotificationDto, PullEvent } from './types.ts';
+import type { CardDto, ChatEvent, FeatEvent, NotificationDto, PullEvent } from './types.ts';
 
 type LiveMessage =
 	| { type: 'hello'; pulls: PullEvent[]; messages: ChatEvent[] }
 	| ({ type: 'pull' } & PullEvent)
+	| ({ type: 'feat' } & FeatEvent)
 	| ({ type: 'chat' } & ChatEvent)
 	| { type: 'trade'; id: number }
 	| ({ type: 'notification' } & NotificationDto);
@@ -18,6 +19,8 @@ const MAX_MESSAGES = 100;
  */
 export class Live {
 	pulls = $state<PullEvent[]>([]);
+	/** Sets completed and achievements earned by anyone, since the page opened */
+	feats = $state<FeatEvent[]>([]);
 	messages = $state<ChatEvent[]>([]);
 	connected = $state(false);
 	/** Messages that arrived while the panel was closed */
@@ -90,6 +93,12 @@ export class Live {
 				if (this.blocked.has(p.user)) break;
 				this.pulls = [p, ...this.pulls].slice(0, MAX_PULLS);
 				this.#need([p.card]);
+				break;
+			}
+			case 'feat': {
+				const { type: _, ...f } = m;
+				if (this.blocked.has(f.user)) break;
+				this.feats = [f, ...this.feats].slice(0, MAX_PULLS);
 				break;
 			}
 			case 'chat': {

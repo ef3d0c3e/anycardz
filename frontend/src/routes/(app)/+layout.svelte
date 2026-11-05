@@ -5,7 +5,7 @@
 	import { getI18n, LANGS, type Lang } from '#lib/i18n/index.svelte.ts';
 	import { getTheme, setCookie, THEMES } from '#lib/theme.svelte.ts';
 	import { setCatalog, setSession } from '#lib/session.svelte.ts';
-	import { post } from '#lib/api.ts';
+	import { api, post } from '#lib/api.ts';
 	import { setSound, soundOn } from '#lib/fx.ts';
 	import Odometer from '#lib/components/Odometer.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -18,6 +18,8 @@
 	import TermsGate from '#lib/components/TermsGate.svelte';
 	import { getToasts } from '#lib/session.svelte.ts';
 	import { setLive } from '#lib/live.svelte.ts';
+	import { featLine } from '#lib/progress.ts';
+	import type { MeDto } from '#lib/types.ts';
 	import { onMount } from 'svelte';
 
 	let { data, children }: LayoutProps = $props();
@@ -37,6 +39,14 @@
 			if (n.trade && page.url.pathname === `/trade/${n.trade}`) return;
 			session.notifications++;
 			if (n.kind === 'friend_request') session.friendRequests++;
+			if (n.kind === 'achievement') {
+				toasts.show(featLine(i18n, catalog, n.detail ?? ''));
+				// The reward is in the balance now
+				api<MeDto>('/me')
+					.then((me) => (session.coins = me.coins))
+					.catch(() => {});
+				return;
+			}
 			toasts.show(i18n.t(`notif.${n.kind}`, { name: n.actor ?? '?' }));
 		});
 		return () => {

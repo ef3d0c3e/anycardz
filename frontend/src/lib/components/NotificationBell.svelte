@@ -5,13 +5,17 @@
 	import { api, post } from '#lib/api.ts';
 	import type { NotificationDto } from '#lib/types.ts';
 	import Avatar from './Avatar.svelte';
+	import { featHref, featLine } from '#lib/progress.ts';
+	import { getCatalog } from '#lib/session.svelte.ts';
 
 	const i18n = getI18n();
 	const session = getSession();
+	const catalog = getCatalog();
 	let open = $state(false);
 	let items = $state<NotificationDto[]>([]);
 
 	export function hrefOf(n: NotificationDto) {
+		if (n.kind === 'achievement') return featHref(n.detail ?? '');
 		if (n.kind === 'friend_request') return '/friends';
 		if (n.kind === 'friend_accepted') return `/players/${encodeURIComponent(n.actor ?? '')}`;
 		return n.trade ? `/trade/${n.trade}` : '/trade';
@@ -63,9 +67,15 @@
 				{#each items as n (n.id)}
 					<li>
 						<a href={hrefOf(n)} class:unread={!n.read} onclick={() => (open = false)}>
-							<Avatar name={n.actor ?? '?'} src={n.actor_avatar} size={32} />
+							{#if n.kind === 'achievement'}
+								<span class="medal" aria-hidden="true">★</span>
+							{:else}
+								<Avatar name={n.actor ?? '?'} src={n.actor_avatar} size={32} />
+							{/if}
 							<span class="text">
-								{i18n.t(`notif.${n.kind}`, { name: n.actor ?? '?' })}
+								{n.kind === 'achievement'
+									? featLine(i18n, catalog, n.detail ?? '')
+									: i18n.t(`notif.${n.kind}`, { name: n.actor ?? '?' })}
 								<time datetime={n.at}>{ago(n.at, i18n.lang)}</time>
 							</span>
 						</a>
@@ -79,6 +89,17 @@
 </div>
 
 <style>
+	.medal {
+		width: 32px;
+		height: 32px;
+		flex: none;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: linear-gradient(135deg, #ffcf5c, #f08a24);
+		color: #fff;
+		font-size: 16px;
+	}
 	.bell-wrap {
 		position: relative;
 	}

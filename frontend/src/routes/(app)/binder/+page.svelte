@@ -69,6 +69,13 @@
 			})
 	);
 	const ownedHere = $derived(completion[data.collection.slug] ?? 0);
+	// Rewards: what is left to earn in this set, or that it is earned
+	const earned = $derived(new Set(data.binder.achievements));
+	const setDone = $derived(earned.has(`set:${data.collection.slug}`));
+	const foilDone = $derived(earned.has(`foilset:${data.collection.slug}`));
+	const foilsHere = $derived(
+		(data.collection.cards ?? []).filter((c) => (owned[c.slug]?.foils ?? 0) > 0).length
+	);
 
 	// New set or filter: back to the first page
 	$effect(() => {
@@ -184,6 +191,22 @@
 			</div>
 		</div>
 		<p class="stat">{i18n.t('binder.stat', { owned: ownedHere, total: data.collection.total })}</p>
+		<p class="rewards">
+			<span class="reward" class:done={setDone}
+				>{setDone
+					? `✓ ${i18n.t('binder.reward_done')}`
+					: i18n.t('binder.reward', { n: data.collection.set_reward })}</span
+			>
+			<span class="reward foil" class:done={foilDone}
+				>{foilDone
+					? `✓ ${i18n.t('binder.foil_reward_done')}`
+					: i18n.t('binder.foil_reward', {
+							owned: foilsHere,
+							total: data.collection.total,
+							n: data.collection.foil_set_reward
+						})}</span
+			>
+		</p>
 	</div>
 
 	<div class="seg" role="group" aria-label={i18n.t('binder.filter')}>
@@ -308,6 +331,27 @@
 	.stat {
 		color: var(--muted);
 		font: 600 13px var(--mono);
+	}
+	.rewards {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.reward {
+		font-size: 12px;
+		font-weight: 600;
+		padding: 3px 10px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		color: var(--muted);
+	}
+	.reward.foil {
+		border-color: color-mix(in srgb, #ffcf5c 55%, var(--line));
+	}
+	.reward.done {
+		background: color-mix(in srgb, var(--ok, #2fb47c) 16%, transparent);
+		border-color: transparent;
+		color: var(--ink);
 	}
 	.seg {
 		align-self: flex-start;

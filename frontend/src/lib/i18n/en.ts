@@ -485,5 +485,18 @@ export default {
 	'errors.free_packs_not_ready': 'Your free packs are not ready yet.',
 	'pity.left_one': 'Legendary guaranteed in this pack',
 	'pity.left_other': 'Legendary guaranteed within {n} packs',
-	'pity.hint': 'Every pack without a legendary brings the guaranteed one closer.'
+	'pity.hint': 'Every pack without a legendary brings the guaranteed one closer.',
+
+	'feat.completed': 'Set complete: {name}',
+	'feat.completed_by': '{user} completed {name}',
+	'feat.achievement': 'Achievement: {name}',
+	'feat.achievement_by': '{user} earned {name}',
+	'feat.foil_set_name': '{set} in foil',
+	'feat.reward_toast': '{name}: +{n} coins',
+	'binder.reward': 'Complete the set: +{n} coins',
+	'binder.reward_done': 'Set complete',
+	'binder.foil_reward': 'Foil set {owned}/{total}: +{n} coins',
+	'binder.foil_reward_done': 'Foil set complete',
+	'profile.badges': 'Badges',
+	'profile.no_badges': 'No badges yet.'
 } as const;
