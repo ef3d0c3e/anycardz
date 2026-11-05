@@ -13,8 +13,8 @@ use crate::AppState;
 use crate::auth::{self, CurrentUser, SESSION_COOKIE};
 use crate::error::{ApiError, ApiResult};
 use crate::schema::{
-    blocks, boosters, friendships, notifications, owned_cards, sessions, shout_messages, streaks, topups, trade_lines,
-    trades, users,
+    blocks, boosters, friendships, listings, notifications, owned_cards, sessions, shout_messages, streaks, topups,
+    trade_lines, trades, users,
 };
 
 /// The current password, or an error. Wrong guesses count against the same
@@ -267,11 +267,42 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         .await?;
 
     let earned = crate::progress::earned(conn, uid).await?;
+    // Listings the player made, and the ones they bought
+    #[allow(clippy::type_complexity)]
+    let market: Vec<(
+        i64,
+        i64,
+        Option<i64>,
+        String,
+        Option<String>,
+        i64,
+        i64,
+        String,
+        DateTime<Utc>,
+        Option<DateTime<Utc>>,
+    )> = listings::table
+        .filter(listings::seller_id.eq(uid).or(listings::buyer_id.eq(uid)))
+        .order(listings::id)
+        .select((
+            listings::id,
+            listings::seller_id,
+            listings::buyer_id,
+            listings::card,
+            listings::foil,
+            listings::price,
+            listings::fee,
+            listings::state,
+            listings::created_at,
+            listings::closed_at,
+        ))
+        .load(conn)
+        .await?;
 
     let mut others: Vec<i64> = friends.iter().flat_map(|f| [f.0, f.1]).collect();
     others.extend(blocked.iter().map(|b| b.0));
     others.extend(my_trades.iter().flat_map(|t| [t.1, t.2]));
     others.extend(notes.iter().filter_map(|n| n.1));
+    others.extend(market.iter().flat_map(|m| [Some(m.1), m.2]).flatten());
     let who = names(conn, others).await?;
     let name = |id: i64| who.get(&id).cloned().unwrap_or_else(|| "?".into());
 
@@ -314,6 +345,13 @@ pub async fn export(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
             })
         }).collect::<Vec<_>>(),
         "achievements": earned,
+        "market": market.iter().map(|(_, seller, buyer, card, foil, price, fee, st, created, closed)| json!({
+            "sold_by_you": *seller == uid,
+            "other_player": if *seller == uid { buyer.map(name) } else { Some(name(*seller)) },
+            "card": card, "foil": foil, "price": price,
+            "fee": if *seller == uid { Some(fee) } else { None },
+            "state": st, "listed_at": created, "closed_at": closed,
+        })).collect::<Vec<_>>(),
         "notifications": notes.iter().map(|(kind, actor, trade, read, at)| json!({
             "kind": kind, "from": actor.map(name), "trade": trade, "read_at": read, "at": at,
         })).collect::<Vec<_>>(),

@@ -166,6 +166,28 @@ pub fn sell_price(rarity: Rarity, foil: bool) -> i64 {
     if foil { base * 2 } else { base }
 }
 
+/// Marketplace: the share of each sale that goes to no one, in percent
+pub const MARKET_FEE_PERCENT: i64 = 5;
+/// Open listings a player can have at once
+pub const MARKET_MAX_LISTINGS: i64 = 20;
+/// Highest price, as a multiple of the shop's sell price
+pub const MARKET_MAX_FACTOR: i64 = 10;
+/// Purchases from the same seller in a day: moving coins between one's own
+/// accounts through listings stays slow
+pub const MARKET_PAIR_LIMIT: i64 = 3;
+
+/// Prices a card can be listed at: from what the shop pays (nobody profits by
+/// buying to sell to the shop) to ten times that
+pub fn market_bounds(rarity: Rarity, foil: bool) -> (i64, i64) {
+    let base = sell_price(rarity, foil);
+    (base, base * MARKET_MAX_FACTOR)
+}
+
+/// The fee kept from a sale, rounded up, at least 1
+pub fn market_fee(price: i64) -> i64 {
+    ((price * MARKET_FEE_PERCENT + 99) / 100).max(1)
+}
+
 pub fn streak_reward(day: i32) -> i64 {
     STREAK_REWARDS[(day.max(1) as usize - 1).min(STREAK_REWARDS.len() - 1)]
 }
@@ -193,6 +215,16 @@ mod tests {
     use super::*;
     use crate::data::Catalog;
     use rand::{SeedableRng, rngs::StdRng};
+
+    #[test]
+    fn market_prices_and_fees() {
+        assert_eq!(market_bounds(Rarity::Common, false), (10, 100));
+        assert_eq!(market_bounds(Rarity::Legendary, true), (500, 5000));
+        assert_eq!(market_fee(10), 1);
+        assert_eq!(market_fee(100), 5);
+        assert_eq!(market_fee(101), 6);
+        assert_eq!(market_fee(5000), 250);
+    }
 
     #[test]
     fn rarity_odds_match_the_rules() {

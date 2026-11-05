@@ -25,6 +25,8 @@ pub enum Kind {
     TradeCancelled,
     /// A set completed or an achievement earned; the key is in `detail`
     Achievement,
+    /// A listing sold; card, foil and coins are in `detail` as JSON
+    MarketSold,
 }
 
 impl Kind {
@@ -38,6 +40,7 @@ impl Kind {
             Kind::TradeDone => "trade_done",
             Kind::TradeCancelled => "trade_cancelled",
             Kind::Achievement => "achievement",
+            Kind::MarketSold => "market_sold",
         }
     }
 }
@@ -147,6 +150,31 @@ pub async fn achievement(state: &AppState, conn: &mut AsyncPgConnection, user: i
     let row: Row = (id, Kind::Achievement.as_str().to_owned(), None, None, Some(key.to_owned()), None, at);
     let dto = dtos(conn, vec![row]).await?.pop().unwrap();
     state.live.notify(user, serde_json::to_value(dto).expect("notifications serialize"));
+    Ok(())
+}
+
+/// Tells a seller their listing sold, and to whom
+pub async fn market_sold(
+    state: &AppState,
+    conn: &mut AsyncPgConnection,
+    seller: i64,
+    buyer: i64,
+    detail: &serde_json::Value,
+) -> ApiResult<()> {
+    let detail = detail.to_string();
+    let (id, at): (i64, DateTime<Utc>) = diesel::insert_into(notifications::table)
+        .values((
+            notifications::user_id.eq(seller),
+            notifications::kind.eq(Kind::MarketSold.as_str()),
+            notifications::actor_id.eq(buyer),
+            notifications::detail.eq(&detail),
+        ))
+        .returning((notifications::id, notifications::created_at))
+        .get_result(conn)
+        .await?;
+    let row: Row = (id, Kind::MarketSold.as_str().to_owned(), Some(buyer), None, Some(detail), None, at);
+    let dto = dtos(conn, vec![row]).await?.pop().unwrap();
+    state.live.notify(seller, serde_json::to_value(dto).expect("notifications serialize"));
     Ok(())
 }
 

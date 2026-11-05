@@ -94,6 +94,8 @@ pub struct Metrics {
     coins_earned: Family<CoinLabels, Counter>,
     roulette: Family<ResultLabels, Counter>,
     trades: Family<ResultLabels, Counter>,
+    market: Family<ResultLabels, Counter>,
+    market_fees: Counter,
     auth: Family<AuthLabels, Counter>,
     shouts: Counter,
     free_packs: Counter,
@@ -127,6 +129,8 @@ impl Default for Metrics {
             coins_earned: Default::default(),
             roulette: Default::default(),
             trades: Default::default(),
+            market: Default::default(),
+            market_fees: Default::default(),
             auth: Default::default(),
             shouts: Default::default(),
             free_packs: Default::default(),
@@ -147,6 +151,8 @@ impl Default for Metrics {
         r.register("coins_earned", "Coins entering players' balances", m.coins_earned.clone());
         r.register("roulette_spins", "Foil roulette spins, by result (won, lost)", m.roulette.clone());
         r.register("trades", "Trades ended, by result (done, cancelled)", m.trades.clone());
+        r.register("market_listings", "Marketplace listings, by event (listed, withdrawn, sold)", m.market.clone());
+        r.register("market_fees_coins", "Coins taken as marketplace fees, out of the economy", m.market_fees.clone());
         r.register("auth_attempts", "Logins and sign-ups, by result", m.auth.clone());
         r.register("shouts", "Shoutbox messages posted", m.shouts.clone());
         r.register("achievements", "Achievements earned, by kind (set, foil_set, ...)", m.achievements.clone());
@@ -189,6 +195,14 @@ impl Metrics {
     }
 
     /// `result`: done, cancelled
+    pub fn market(&self, result: &'static str) {
+        self.market.get_or_create(&ResultLabels { result }).inc();
+    }
+
+    pub fn market_fee(&self, coins: i64) {
+        self.market_fees.inc_by(coins.max(0) as u64);
+    }
+
     pub fn trade(&self, result: &'static str) {
         self.trades.get_or_create(&ResultLabels { result }).inc();
     }

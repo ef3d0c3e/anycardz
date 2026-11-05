@@ -148,6 +148,21 @@ diesel::table! {
         created_at -> Timestamptz,
     }
 }
+diesel::table! {
+    listings (id) {
+        id -> Int8,
+        seller_id -> Int8,
+        card -> Text,
+        foil -> Nullable<Text>,
+        obtained_at -> Timestamptz,
+        price -> Int8,
+        state -> Text,
+        buyer_id -> Nullable<Int8>,
+        fee -> Int8,
+        created_at -> Timestamptz,
+        closed_at -> Nullable<Timestamptz>,
+    }
+}
 diesel::joinable!(shout_messages -> users (user_id));
 diesel::joinable!(achievements -> users (user_id));
 diesel::joinable!(trade_lines -> trades (trade_id));
@@ -171,4 +186,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     blocks,
     notifications,
     achievements,
+    listings,
 );

@@ -60,6 +60,7 @@ pub const ACHIEVEMENTS: &[Achievement] = &[
     a("roulette_streak_3", 1000, Some((Metric::RouletteStreak, 3))),
     a("first_trade", 150, Some((Metric::Trades, 1))),
     a("trades_25", 750, Some((Metric::Trades, 25))),
+    a("first_sale", 100, None),
     a("streak_7", 300, Some((Metric::Streak, 7))),
     a("streak_30", 1500, Some((Metric::Streak, 30))),
     a("first_set", 250, Some((Metric::Sets, 1))),
