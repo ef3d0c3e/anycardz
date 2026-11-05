@@ -37,7 +37,9 @@
 		} catch {
 			recent = [];
 		}
-		input?.focus();
+		// Typing right away with a keyboard; on touch screens focusing would pop the
+		// on-screen keyboard over the list
+		if (matchMedia('(pointer: fine)').matches) input?.focus();
 	});
 
 	const owned = (c: CollectionDto) => completion[c.slug] ?? 0;
