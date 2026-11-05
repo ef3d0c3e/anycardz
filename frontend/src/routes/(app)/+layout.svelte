@@ -32,6 +32,20 @@
 	const topup = setTopup();
 	const live = setLive();
 	const toasts = getToasts();
+	// Several notifications can land together: only the latest answer counts
+	let meCalls = 0;
+	function refreshMe(withPile: boolean) {
+		const call = ++meCalls;
+		api<MeDto>('/me')
+			.then((me) => {
+				if (call !== meCalls) return;
+				session.coins = me.coins;
+				session.missions = me.missions;
+				// Only the mission bonus adds a pack; the open page keeps the pile otherwise
+				if (withPile) session.pile = me.pile;
+			})
+			.catch(() => {});
+	}
 	onMount(() => {
 		live.start();
 		// New notifications: the count, and a toast unless the page already shows it
@@ -42,13 +56,7 @@
 			toasts.show(notifText(i18n, catalog, n));
 			// Achievements, sales and missions pay (a mission bonus is a pack): refresh
 			if (n.kind === 'achievement' || n.kind === 'market_sold' || n.kind === 'mission') {
-				api<MeDto>('/me')
-					.then((me) => {
-						session.coins = me.coins;
-						session.pile = me.pile;
-						session.missions = me.missions;
-					})
-					.catch(() => {});
+				refreshMe(n.kind === 'mission');
 			}
 			if (n.kind === 'market_sold') invalidate('app:market');
 		});
