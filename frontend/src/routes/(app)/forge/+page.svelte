@@ -205,26 +205,12 @@
 	const plainOf = (slug: string) => (owned[slug] ? owned[slug].count - owned[slug].foils : 0);
 	const burnedOf = (slug: string, foil: boolean) =>
 		burn.filter((b) => b.slug === slug && b.foil === foil).length;
-	/** Copies left to burn: any copy, plain first, except the one being rolled */
-	function freeRO(slug: string) {
-		const o = owned[slug];
-		if (!o) return { plain: 0, foil: 0 };
-		return {
-			plain: Math.max(0, plainOf(slug) - burnedOf(slug, false) - (slug === rTarget ? 1 : 0)),
-			foil: Math.max(0, o.foils - burnedOf(slug, true))
-		};
-	}
-	const leftRO = (slug: string) => {
-		const f = freeRO(slug);
-		return f.plain + f.foil;
-	};
-	/** Burning one more copy would leave none of the card */
-	const lastCopy = (slug: string) => slug !== rTarget && leftRO(slug) === 1;
-	/** The next copy burned would be a foil */
-	const nextIsFoil = (slug: string) => {
-		const f = freeRO(slug);
-		return f.plain === 0 && f.foil > 0;
-	};
+	/** Plain copies left to burn, except the one being rolled. Foils never burn. */
+	const leftRO = (slug: string) =>
+		Math.max(0, plainOf(slug) - burnedOf(slug, false) - (slug === rTarget ? 1 : 0));
+	/** Burning one more copy would leave none of the card, foils included */
+	const lastCopy = (slug: string) =>
+		slug !== rTarget && leftRO(slug) === 1 && (owned[slug]?.foils ?? 0) === 0;
 	// Starts on the rarest card the player can roll
 	$effect(() => {
 		if (rTarget && plainOf(rTarget) < 1 && !spinning) rTarget = null;
@@ -282,12 +268,11 @@
 		outcome = null;
 	}
 	function addBurn(slug: string) {
-		const f = freeRO(slug);
-		if (spinning || f.plain + f.foil < 1) return;
+		if (spinning || leftRO(slug) < 1) return;
 		if (chance >= ROULETTE_CAP) return toasts.show(i18n.t('forge.at_cap'));
 		if (burn.length >= ROULETTE_MAX_BURN) return;
 		outcome = null;
-		burn.push({ slug, foil: f.plain < 1 });
+		burn.push({ slug, foil: false });
 		tone(250, 0.08, 'sawtooth', 0.03);
 	}
 	/** Whether the whole dial is on screen, below the header */
@@ -718,17 +703,11 @@
 					disabled={spinning}
 					aria-label={c.title}
 				>
-					<Card
-						card={c}
-						foil={!picking && nextIsFoil(c.slug)
-							? foilOf(owned[c.slug], burnedOf(c.slug, true))
-							: null}
-					>
+					<Card card={c}>
 						{#snippet badge()}
 							{#if !picking}
 								<span class="c-badge">×{leftRO(c.slug)}</span>
-								{#if lastCopy(c.slug)}<span class="c-badge last">{i18n.t('forge.last_copy')}</span>
-								{:else if nextIsFoil(c.slug)}<span class="c-badge foilb">{i18n.t('card.foil')}</span
+								{#if lastCopy(c.slug)}<span class="c-badge last">{i18n.t('forge.last_copy')}</span
 									>{/if}
 							{/if}
 						{/snippet}

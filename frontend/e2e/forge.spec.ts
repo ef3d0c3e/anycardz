@@ -133,3 +133,28 @@ test('the trade-up tray lists single copies, and fill leaves them alone', async 
 	await expect(page.locator('.core-in b')).toHaveText('1/10');
 	await expect(page.locator('.tray .tcard').first()).toBeDisabled();
 });
+
+test('foils never burn in the roulette: they stay out of the tray', async ({ page }) => {
+	await newPlayer(page);
+	const legendary = await cardOf(page, 'ww2-warships', 'legendary');
+	const [plainAndFoil, foilOnly] = (
+		await (await page.request.get('/api/collections/ww2-warships')).json()
+	).cards.filter((c: { rarity: string }) => c.rarity === 'common') as {
+		slug: string;
+		title: string;
+	}[];
+	await give(page, legendary.slug, 1);
+	await give(page, plainAndFoil.slug, 1);
+	await give(page, plainAndFoil.slug, 1, 'foil3');
+	await give(page, foilOnly.slug, 2, 'foil1');
+	await visit(page, '/forge?tab=roulette');
+	await expect(page.locator('h1')).toContainText(legendary.title);
+
+	await expect(page.locator('.tray .tcard', { hasText: foilOnly.title })).toHaveCount(0);
+	const mixed = page.locator('.tray .tcard', { hasText: plainAndFoil.title });
+	// Only the plain copy counts, and burning it leaves the foil: not a last copy
+	await expect(mixed.locator('.c-badge')).toHaveText('×1');
+	await mixed.click();
+	await expect(page.locator('.burns .tcard')).toHaveCount(1);
+	await expect(mixed).toHaveCount(0);
+});

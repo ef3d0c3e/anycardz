@@ -226,7 +226,7 @@ const fr: Partial<Record<Key, string>> = {
 	'forge.roulette_won': '{name} est brillante',
 	'forge.roulette_lost': '{name} a été détruite',
 	'forge.roulette_lead':
-		'La zone dorée correspond exactement à tes chances. Chaque carte brûlée l’agrandit, jusqu’à 50 %. Toutes les cartes peuvent être brûlées, derniers exemplaires et brillantes compris (ils sont signalés). Les cartes brûlées sont perdues quoi qu’il arrive, et si l’aiguille rate, la carte choisie est détruite elle aussi.',
+		'La zone dorée correspond exactement à tes chances. Chaque carte brûlée l’agrandit, jusqu’à 50 %. Tout exemplaire normal peut être brûlé, derniers exemplaires compris (ils sont signalés) ; les brillantes, jamais. Les cartes brûlées sont perdues quoi qu’il arrive, et si l’aiguille rate, la carte choisie est détruite elle aussi.',
 	'forge.math_base': 'Base {p} ({rarity})',
 	'forge.math_bonus': '{n} × {rarity} {p}',
 	'forge.math_total': '= {p} de réussite',
@@ -634,6 +634,7 @@ const fr: Partial<Record<Key, string>> = {
 	'errors.market_own': 'C’est ta propre vente.',
 	'errors.listing_gone': 'Quelqu’un l’a achetée avant toi, ou elle a été retirée.',
 	'errors.market_seller_limit': 'Tu peux acheter 3 cartes par jour au même joueur.',
+	'errors.roulette_foil': 'Les cartes brillantes ne peuvent pas être brûlées.',
 	'errors.unknown_listing': 'Cette vente n’est plus ouverte.',
 	'ach.first_sale': 'Boutique ouverte',
 	'ach.first_sale.desc': 'Vends une carte sur le marché.'

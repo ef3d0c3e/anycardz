@@ -225,7 +225,7 @@ export default {
 	'forge.roulette_won': '{name} is foil now',
 	'forge.roulette_lost': '{name} was destroyed',
 	'forge.roulette_lead':
-		'The gold slice is your exact chance. Every card you burn widens it, up to 50%. Any card can burn, last copies and foils included (they are marked). Burned cards are gone either way, and if the needle misses, the card you tried to foil is destroyed too.',
+		'The gold slice is your exact chance. Every card you burn widens it, up to 50%. Any plain copy can burn, last copies included (they are marked); foils never burn. Burned cards are gone either way, and if the needle misses, the card you tried to foil is destroyed too.',
 	'forge.math_base': 'Base {p} ({rarity})',
 	'forge.math_bonus': '{n} × {rarity} {p}',
 	'forge.math_total': '= {p} to win',
@@ -627,6 +627,7 @@ export default {
 	'errors.market_own': 'That is your own listing.',
 	'errors.listing_gone': 'Someone bought it first, or it was withdrawn.',
 	'errors.market_seller_limit': 'You can buy 3 cards a day from the same player.',
+	'errors.roulette_foil': 'Foil cards cannot be burned.',
 	'errors.unknown_listing': 'This listing is no longer open.',
 	'ach.first_sale': 'Open for business',
 	'ach.first_sale.desc': 'Sell a card on the market.'
