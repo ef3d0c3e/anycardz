@@ -1,5 +1,5 @@
 # Development commands. Copy .env.example to .env first.
-.PHONY: dev db-up db-down api web test test-e2e check fmt
+.PHONY: dev db-up db-down api web test test-e2e check fmt prod-up prod-down prod-logs
 
 dev: db-up
 	@echo "API on :8080, web on http://localhost:5173"
@@ -37,3 +37,15 @@ check:
 fmt:
 	cargo fmt
 	cd frontend && npx prettier --write src e2e
+
+# Production (compose.prod.yaml); needs .env.prod, see .env.prod.example
+PROD = docker compose -f compose.prod.yaml --env-file .env.prod
+
+prod-up:
+	$(PROD) up -d --build
+
+prod-down:
+	$(PROD) down
+
+prod-logs:
+	$(PROD) logs -f --tail=100

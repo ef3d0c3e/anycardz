@@ -1,0 +1,11 @@
+target
+backend/cache
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+frontend/test-results
+.env
+.env.*
+.git
+.mcp.json
+.claude

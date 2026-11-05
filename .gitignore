@@ -7,3 +7,4 @@ node_modules/
 # Local tooling configuration (holds the Lific API key)
 .mcp.json
 .claude/settings.local.json
+.env.prod

@@ -1,0 +1,77 @@
+# Production: docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
+# Caddy terminates HTTPS (certificates from Let's Encrypt for $DOMAIN) and is the only
+# service with published ports.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: anycardz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: anycardz
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anycardz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://anycardz:${POSTGRES_PASSWORD}@db:5432/anycardz
+      ANYCARDZ_SECURE_COOKIES: ${SECURE_COOKIES:-1}
+      # Only Caddy's X-Forwarded-For is believed (rate limits are per client address)
+      ANYCARDZ_TRUSTED_PROXIES: 172.30.0.10
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - ${DATA_DIR:?set DATA_DIR in .env.prod}:/data:ro
+      - cache:/cache
+    networks: [internal]
+
+  web:
+    build: frontend
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      ORIGIN: ${ORIGIN:-https://${DOMAIN}}
+      API_URL: http://api:8080
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api, web]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      internal:
+        ipv4_address: 172.30.0.10
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  db-data:
+  cache:
+  caddy-data:
+  caddy-config:

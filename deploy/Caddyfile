@@ -1,0 +1,10 @@
+# Everything comes in here: the API (and its WebSocket) under /api, the site otherwise.
+{$DOMAIN} {
+	encode zstd gzip
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
