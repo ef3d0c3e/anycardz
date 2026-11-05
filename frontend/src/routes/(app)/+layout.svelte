@@ -471,11 +471,12 @@
 	.nav a[aria-current='page'] {
 		color: var(--accent);
 	}
+	/* Phones: a dark tile inside the bar, the same height as the other icons'
+	   row, so the tab never sticks out over the page */
 	.pack-ico {
-		width: 54px;
-		height: 54px;
-		margin-top: -26px;
-		border-radius: 18px;
+		width: 46px;
+		height: 30px;
+		border-radius: 10px;
 		display: grid;
 		place-items: center;
 		background: var(--ink);
@@ -485,8 +486,8 @@
 		transition: transform 0.2s;
 	}
 	.pack-ico :global(svg) {
-		width: 26px;
-		height: 26px;
+		width: 20px;
+		height: 20px;
 	}
 	.open-tab:hover .pack-ico {
 		transform: rotate(3deg) translateY(-2px);
@@ -497,8 +498,8 @@
 	}
 	.badge {
 		position: absolute;
-		top: -30px;
-		right: 2px;
+		top: -4px;
+		right: 0;
 		min-width: 18px;
 		height: 18px;
 		border-radius: 9px;
@@ -675,8 +676,15 @@
 			order: -1;
 			margin-bottom: 10px;
 		}
+		/* The rail has room: the big tile */
 		.pack-ico {
-			margin-top: 0;
+			width: 54px;
+			height: 54px;
+			border-radius: 18px;
+		}
+		.pack-ico :global(svg) {
+			width: 26px;
+			height: 26px;
 		}
 		.badge {
 			top: -6px;
