@@ -218,7 +218,11 @@ async fn open_pack_then_sell() {
     assert_eq!(status, 200);
     let price = sold["sold_for"].as_i64().unwrap();
     assert!(price >= 10);
-    assert_eq!(sold["coins"].as_i64().unwrap(), 750 + price);
+    // 1000 - a booster + what the pack's achievements paid (first pack, maybe a
+    // first legendary or foil) + the sale
+    let rewards: i64 = pack["unlocked"].as_array().unwrap().iter().map(|u| u["coins"].as_i64().unwrap()).sum();
+    assert!(rewards >= 50);
+    assert_eq!(sold["coins"].as_i64().unwrap(), 750 + rewards + price);
 
     let (status, err) = post(&app, "/api/binder/sell", &cookie, json!({ "card": "diamond", "foil": true })).await;
     assert!(status == 409 && err["error"] == "not_owned" || status == 200, "only owned copies sell");
@@ -505,8 +509,9 @@ async fn trade_swaps_cards_and_coins_once_both_seal() {
     assert_eq!(b_has.get("garnet"), Some(&(1, 1)), "the foil stays foil");
     assert_eq!(b_has.get("quartz"), Some(&(2, 0)));
     assert!(!b_has.contains_key("diamond"));
-    assert_eq!(get(&app, "/api/me", &a).await.1["coins"], 1100);
-    assert_eq!(get(&app, "/api/me", &b).await.1["coins"], 900);
+    // Plus the first_trade achievement on both sides
+    assert_eq!(get(&app, "/api/me", &a).await.1["coins"], 1100 + 150);
+    assert_eq!(get(&app, "/api/me", &b).await.1["coins"], 900 + 150);
 
     let (s, err) = post(&app, &format!("/api/trades/{id}/seal"), &a, json!({ "version": 2 })).await;
     assert_eq!((s, err["error"].as_str()), (409, Some("trade_closed")));
@@ -929,8 +934,9 @@ async fn notifications_for_friends_and_trades() {
     // Read one, then all
     let first = get(&app, "/api/notifications", &b).await.1["items"][0]["id"].as_i64().unwrap();
     let (_, r) = post(&app, "/api/notifications/read", &b, json!({ "ids": [first] })).await;
-    assert_eq!(r["unread"], 3);
-    assert_eq!(get(&app, "/api/me", &b).await.1["notifications"], 3);
+    // The trade ones, and the first_trade achievement
+    assert_eq!(r["unread"], 4);
+    assert_eq!(get(&app, "/api/me", &b).await.1["notifications"], 4);
     let (_, r) = post(&app, "/api/notifications/read", &b, json!({})).await;
     assert_eq!(r["unread"], 0);
     // Someone else's notifications stay unread
@@ -1392,20 +1398,22 @@ async fn completing_a_set_pays_once() {
     assert_eq!((s, r["state"].as_str()), (200, Some("done")), "{r}");
 
     // Paid, remembered, told, and shown on the profile
-    assert_eq!(coins(&get(&app, "/api/me", &a).await.1), before + reward);
+    // With the first_set and first_trade achievements it brought
+    assert_eq!(coins(&get(&app, "/api/me", &a).await.1), before + reward + 250 + 150);
     let (_, binder) = get(&app, "/api/binder", &a).await;
-    assert_eq!(binder["achievements"], json!(["set:minerals"]));
+    assert!(binder["achievements"].as_array().unwrap().contains(&json!("set:minerals")));
     let (_, notes) = get(&app, "/api/notifications", &a).await;
-    let note = notes["items"].as_array().unwrap().iter().find(|n| n["kind"] == "achievement").unwrap().clone();
-    assert_eq!(note["detail"], "set:minerals");
+    assert!(
+        notes["items"].as_array().unwrap().iter().any(|n| n["kind"] == "achievement" && n["detail"] == "set:minerals")
+    );
     let (_, profile) = get(&app, &format!("/api/players/{a_name}"), &b).await;
-    assert_eq!(profile["achievements"][0]["key"], "set:minerals");
-    assert_eq!(profile["achievements"][0]["coins"], reward);
+    let badge = profile["achievements"].as_array().unwrap().iter().find(|a| a["key"] == "set:minerals").unwrap();
+    assert_eq!(badge["coins"], reward);
 
     // Never twice, even when more cards of the set land
     post(&app, "/api/shop/boosters", &a, json!({ "collection": "minerals" })).await;
     let (_, pack) = post(&app, "/api/pile/open", &a, json!({})).await;
-    assert_eq!(pack["unlocked"], json!([]));
+    assert!(pack["unlocked"].as_array().unwrap().iter().all(|u| u["key"] != "set:minerals"));
     let _ = b_name;
 }
 
@@ -1423,11 +1431,108 @@ async fn a_pack_can_complete_sets_and_foil_sets() {
     }
     post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
     let (_, pack) = post(&app, "/api/pile/open", &cookie, json!({})).await;
-    let keys: Vec<&str> = pack["unlocked"].as_array().unwrap().iter().map(|u| u["key"].as_str().unwrap()).collect();
+    let sets: Vec<&Value> =
+        pack["unlocked"].as_array().unwrap().iter().filter(|u| u["key"].as_str().unwrap().contains(':')).collect();
+    let keys: Vec<&str> = sets.iter().map(|u| u["key"].as_str().unwrap()).collect();
     assert_eq!(keys, ["set:minerals", "foilset:minerals"]);
-    let paid: i64 = pack["unlocked"].as_array().unwrap().iter().map(|u| u["coins"].as_i64().unwrap()).sum();
+    let paid: i64 = sets.iter().map(|u| u["coins"].as_i64().unwrap()).sum();
     assert_eq!(
         paid,
         anycardz_api::progress::set_reward(set.len()) + anycardz_api::progress::foil_set_reward(set.len())
     );
+}
+
+#[actix_web::test]
+async fn achievements_come_from_play_and_pay_once() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("ach");
+    let cookie = register(&app, &name).await;
+    let find =
+        |list: &Value, id: &str| list["items"].as_array().unwrap().iter().find(|a| a["id"] == id).unwrap().clone();
+
+    let (_, list) = get(&app, "/api/achievements", &cookie).await;
+    let first = find(&list, "first_pack");
+    assert_eq!(
+        (first["metric"].as_str(), first["goal"].as_i64(), first["have"].as_i64()),
+        (Some("packs"), Some(1), Some(0))
+    );
+    assert!(first["earned_at"].is_null());
+
+    // A first pack
+    post(&app, "/api/shop/boosters", &cookie, json!({ "collection": "minerals" })).await;
+    let (_, pack) = post(&app, "/api/pile/open", &cookie, json!({})).await;
+    let keys: Vec<&str> = pack["unlocked"].as_array().unwrap().iter().map(|u| u["key"].as_str().unwrap()).collect();
+    assert!(keys.contains(&"first_pack"), "{keys:?}");
+    let (_, list) = get(&app, "/api/achievements", &cookie).await;
+    assert!(find(&list, "first_pack")["earned_at"].is_string());
+    assert_eq!(find(&list, "packs_50")["have"], 1);
+
+    // A seventh day in a row
+    {
+        let mut conn = ctx.state.pool.get().await.unwrap();
+        diesel::sql_query(
+            "INSERT INTO streaks (user_id, day, best, last_claim)
+             SELECT id, 6, 6, (now() AT TIME ZONE 'UTC')::date - 1 FROM users WHERE username = $1",
+        )
+        .bind::<diesel::sql_types::Text, _>(&name)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    }
+    let before = get(&app, "/api/me", &cookie).await.1["coins"].as_i64().unwrap();
+    let (s, r) = post(&app, "/api/streak/claim", &cookie, json!({})).await;
+    assert_eq!((s, r["streak"]["day"].as_i64()), (200, Some(7)), "{r}");
+    let after = get(&app, "/api/me", &cookie).await.1["coins"].as_i64().unwrap();
+    assert_eq!(after - before, r["reward"].as_i64().unwrap() + 300, "the streak reward and streak_7");
+
+    // Five friends: the last acceptance earns it, on both sides of it once
+    for i in 0..5 {
+        let friend = unique(&format!("f{i}"));
+        let fc = register(&app, &friend).await;
+        post(&app, &format!("/api/friends/{name}"), &fc, json!({})).await;
+        post(&app, &format!("/api/friends/{friend}"), &cookie, json!({})).await;
+    }
+    let (_, list) = get(&app, "/api/achievements", &cookie).await;
+    assert!(find(&list, "friends_5")["earned_at"].is_string());
+    let (_, notes) = get(&app, "/api/notifications", &cookie).await;
+    let n = notes["items"].as_array().unwrap().iter().filter(|n| n["detail"] == "friends_5").count();
+    assert_eq!(n, 1);
+}
+
+#[actix_web::test]
+async fn leaderboards_rank_players_and_place_the_caller() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((_, a, a_id), (_, b, b_id)) = pair(&app).await;
+    let legendary = ctx
+        .state
+        .catalog
+        .collection("minerals")
+        .unwrap()
+        .cards
+        .iter()
+        .find(|c| ctx.state.catalog.card(c).unwrap().rarity == anycardz_api::data::Rarity::Legendary)
+        .unwrap()
+        .clone();
+    // More than anyone from earlier runs: rank 1, maybe tied with them
+    give(&ctx, a_id, &legendary, None, 500).await;
+    give(&ctx, b_id, &legendary, None, 499).await;
+
+    let (s, board) = get(&app, "/api/leaderboards?board=legendaries&period=week", &a).await;
+    assert_eq!(s, 200, "{board}");
+    assert_eq!(board["me"]["rank"], 1);
+    assert_eq!(board["me"]["value"], 500);
+    assert_eq!(board["top"][0]["value"], 500);
+    let (_, board) = get(&app, "/api/leaderboards?board=legendaries&period=all", &b).await;
+    assert_eq!(board["me"]["value"], 499);
+    assert!(board["me"]["rank"].as_i64().unwrap() > 1);
+    assert!(board["top"].as_array().unwrap().len() <= 20);
+
+    // Nothing yet: no rank
+    let (_, board) = get(&app, "/api/leaderboards?board=trades&period=week", &a).await;
+    assert!(board["me"].is_null());
+    let (s, err) = get(&app, "/api/leaderboards?board=streak&period=week", &a).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("board_all_time_only")));
+    assert_eq!(get(&app, "/api/leaderboards?board=nope", &a).await.0, 400);
 }
