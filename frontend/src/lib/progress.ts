@@ -39,5 +39,5 @@ export function featLine(
 /** Where an earned key leads */
 export function featHref(key: string): string {
 	const { kind, id } = parseKey(key);
-	return kind === 'other' ? '/achievements' : `/binder?set=${encodeURIComponent(id)}`;
+	return kind === 'other' ? `/achievements#ach-${id}` : `/binder?set=${encodeURIComponent(id)}`;
 }

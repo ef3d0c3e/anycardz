@@ -37,3 +37,15 @@ test('leaderboards: boards, periods, and the player highlighted', async ({ page 
 	await expect(page).toHaveURL(/board=streak$/);
 	await expect(page.getByText('Streaks are all time only.')).toBeVisible();
 });
+
+test('an achievement notification leads to that achievement', async ({ page }) => {
+	await newPlayer(page, 1, 'desserts');
+	await page.request.post('/api/pile/open', { data: {} });
+	await visit(page, '/');
+	await page.getByRole('button', { name: /unread notification/ }).click();
+	await page.getByRole('link', { name: /First tear/ }).click();
+	await expect(page).toHaveURL(/\/achievements#ach-first_pack$/);
+	const target = page.locator('#ach-first_pack');
+	await expect(target).toBeInViewport();
+	await expect(target).toContainText('First tear');
+});

@@ -11,5 +11,6 @@ describe('achievement keys', () => {
 	it('leads sets to their binder page', () => {
 		expect(featHref('set:desserts')).toBe('/binder?set=desserts');
 		expect(featHref('foilset:a b')).toBe('/binder?set=a%20b');
+		expect(featHref('first_trade')).toBe('/achievements#ach-first_trade');
 	});
 });

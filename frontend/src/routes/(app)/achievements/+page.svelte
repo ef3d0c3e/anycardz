@@ -39,7 +39,7 @@
 	<ul class="grid">
 		{#each sorted as a (a.id)}
 			{@const done = !!a.earned_at}
-			<li class="ach" class:done>
+			<li class="ach" class:done id="ach-{a.id}">
 				<span class="medal" aria-hidden="true">{done ? '★' : '☆'}</span>
 				<div class="body">
 					<h2>{name(a.id)}</h2>
@@ -95,6 +95,17 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
 		gap: 10px;
+	}
+	/* A notification's link lands here: the achievement stands out a moment */
+	.ach:target {
+		scroll-margin-top: 16px;
+		box-shadow: 0 0 0 2px var(--accent);
+		animation: flash 1.6s ease-out;
+	}
+	@keyframes flash {
+		from {
+			box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+		}
 	}
 	.ach {
 		display: flex;
