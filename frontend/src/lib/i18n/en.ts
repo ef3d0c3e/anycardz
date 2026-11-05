@@ -254,6 +254,7 @@ export default {
 	'forge.none_in_set': 'Nothing from this set here.',
 	'forge.show_all': 'Show all sets',
 	'forge.reveal_forged': 'Forged',
+	'forge.reveal_new': 'New to your binder',
 	'forge.reveal_forged_detail': 'Made from {n} cards in the trade-up.',
 	'forge.reveal_foil': 'Foil won',
 	'forge.reveal_foil_detail': 'The needle landed in the gold at {p}.',

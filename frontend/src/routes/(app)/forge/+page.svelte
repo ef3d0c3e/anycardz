@@ -170,7 +170,9 @@
 		lastTick = 0;
 		const spent = [...slots];
 		try {
-			const res = await post<{ card: string }>('/forge/tradeup', { cards: grouped(spent) });
+			const res = await post<{ card: string; is_new: boolean }>('/forge/tradeup', {
+				cards: grouped(spent)
+			});
 			for (const c of spent) addOwned(c.slug, c.foil ? 0 : -1, c.foil ? -1 : 0);
 			await ensureDetails(res.card);
 			addOwned(res.card, 1);
@@ -183,7 +185,8 @@
 				card: details[res.card],
 				foil: null,
 				eyebrow: i18n.t('forge.reveal_forged'),
-				detail: i18n.t('forge.reveal_forged_detail', { n: TRADEUP_COST })
+				detail: i18n.t('forge.reveal_forged_detail', { n: TRADEUP_COST }),
+				isNew: res.is_new
 			};
 		} catch (e) {
 			pull = 0;
@@ -345,6 +348,7 @@
 		foil: string | null;
 		eyebrow: string;
 		detail: string;
+		isNew?: boolean;
 	} | null>(null);
 </script>
 

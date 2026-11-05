@@ -12,9 +12,11 @@
 		eyebrow: string;
 		/** One line under the card name */
 		detail?: string;
+		/** First copy in the binder: marked like a new pull from a pack */
+		isNew?: boolean;
 		onClose: () => void;
 	}
-	let { card, foil = null, eyebrow, detail, onClose }: Props = $props();
+	let { card, foil = null, eyebrow, detail, isNew = false, onClose }: Props = $props();
 	const i18n = getI18n();
 	let stage = $state<HTMLDivElement>();
 	let button = $state<HTMLButtonElement>();
@@ -43,9 +45,14 @@
 		<p class="eyebrow">{eyebrow}</p>
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="big" onclick={(e) => e.stopPropagation()}>
-			<Card {card} {foil} tilt large />
+			<Card {card} {foil} tilt large>
+				{#snippet badge()}
+					{#if isNew}<span class="c-badge new">{i18n.t('open.new')}</span>{/if}
+				{/snippet}
+			</Card>
 		</div>
 		<h2 id="reveal-title">{card.title}</h2>
+		{#if isNew}<p class="new-line">{i18n.t('forge.reveal_new')}</p>{/if}
 		{#if detail}<p class="detail">{detail}</p>{/if}
 		<button type="button" class="btn" bind:this={button} onclick={onClose}
 			>{i18n.t('reveal.continue')}</button
@@ -126,5 +133,9 @@
 		color: var(--felt);
 		border-color: transparent;
 		min-width: 160px;
+	}
+	.new-line {
+		font-weight: 700;
+		color: var(--ok);
 	}
 </style>

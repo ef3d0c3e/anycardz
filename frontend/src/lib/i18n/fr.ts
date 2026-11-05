@@ -255,6 +255,7 @@ const fr: Partial<Record<Key, string>> = {
 	'forge.none_in_set': 'Rien de ce set ici.',
 	'forge.show_all': 'Voir tous les sets',
 	'forge.reveal_forged': 'Forgée',
+	'forge.reveal_new': 'Nouvelle dans ton classeur',
 	'forge.reveal_forged_detail': 'Issue de la fusion de {n} cartes.',
 	'forge.reveal_foil': 'Brillante gagnée',
 	'forge.reveal_foil_detail': 'L’aiguille s’est arrêtée dans la zone dorée, à {p}.',
