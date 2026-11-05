@@ -85,13 +85,15 @@
 		try {
 			const res = await post<{ pile: string[]; free_packs: FreePacksDto }>('/free-packs/claim');
 			session.freePacks = res.free_packs;
+			// The pile now, not after the flight: news arriving meanwhile (a mission's
+			// bonus pack) would be overwritten by this older answer
+			session.pile = res.pile;
 			freeTick();
 			arp([520, 660, 780]);
 			const target = document.querySelector('[data-nav="open"]');
 			await nextTick();
 			const loot = freeEl?.querySelector('.loot');
 			if (target && loot) await flyTo(loot, target);
-			session.pile = res.pile;
 			toasts.show(i18n.t('free.added', { n: res.free_packs.count }));
 		} catch (e) {
 			toasts.show(i18n.error(e), 'warn');
