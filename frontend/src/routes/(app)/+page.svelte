@@ -189,6 +189,11 @@
 							: i18n.t('lobby.no_packs')}
 					</h2>
 					<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
+					{#if session.tickets?.count}
+						<a class="tickets" href="/open"
+							>{i18n.t('lobby.tickets', { n: session.tickets.count })}</a
+						>
+					{/if}
 					{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
 				</div>
 			</section>
@@ -745,5 +750,10 @@
 		width: 15px;
 		height: 15px;
 		font-size: 8px;
+	}
+	.tickets {
+		font-weight: 700;
+		color: #ffcf5c;
+		text-decoration: none;
 	}
 </style>

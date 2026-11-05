@@ -6,8 +6,15 @@
 	let {
 		label,
 		onScratched,
+		onStart,
 		children
-	}: { label: string; onScratched: () => void; children: import('svelte').Snippet } = $props();
+	}: {
+		label: string;
+		onScratched: () => void;
+		/** The first touch: a ticket asks the server for its result then */
+		onStart?: () => void;
+		children: import('svelte').Snippet;
+	} = $props();
 
 	let canvas: HTMLCanvasElement;
 	let host: HTMLDivElement;
@@ -72,6 +79,7 @@
 			};
 			canvas.onpointerdown = (e) => {
 				if (done) return;
+				if (!started) onStart?.();
 				started = true;
 				canvas.setPointerCapture(e.pointerId);
 				last = pt(e);
@@ -113,7 +121,7 @@
 <style>
 	.ticket {
 		position: relative;
-		height: 96px;
+		height: var(--ticket-h, 96px);
 		border-radius: 14px;
 		background: repeating-linear-gradient(
 			135deg,

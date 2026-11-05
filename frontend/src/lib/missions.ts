@@ -10,7 +10,8 @@ export const GOALS: Record<string, number> = {
 	market_list: 1,
 	market_buy: 1,
 	shop_sell: 3,
-	free_packs: 1
+	free_packs: 1,
+	scratch: 3
 };
 
 /** Where each mission is done */
@@ -23,7 +24,8 @@ export const WHERE: Record<string, string> = {
 	market_list: '/binder',
 	market_buy: '/market',
 	shop_sell: '/binder',
-	free_packs: '/'
+	free_packs: '/',
+	scratch: '/open'
 };
 
 export function missionName(i18n: I18n, key: string, goal = GOALS[key] ?? 1): string {

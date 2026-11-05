@@ -59,6 +59,28 @@ export interface MeDto {
 	/** Packs to open before a legendary is guaranteed, the next one included */
 	pity_left: number;
 	missions: MissionsDto;
+	tickets: TicketsDto;
+}
+
+export interface TicketsDto {
+	count: number;
+	max: number;
+	/** When the next one comes, unless the hand is full */
+	next_at: string | null;
+	/** The foil roulette is doubled until then */
+	boost_until: string | null;
+}
+
+export type Symbol = 'gem' | 'coin' | 'pack' | 'sparkle' | 'star';
+export type Prize = 'jackpot' | 'coins' | 'pack' | 'boost' | 'pair' | 'nothing';
+
+export interface ScratchDto {
+	slots: [Symbol, Symbol, Symbol];
+	prize: Prize;
+	coins_won: number;
+	coins: number;
+	pile: string[];
+	tickets: TicketsDto;
 }
 
 export interface MissionDto {

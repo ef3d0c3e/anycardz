@@ -9,6 +9,8 @@ export async function newPlayer(page: Page, boosters = 0, collection = 'ww2-wars
 	expect(res.status()).toBe(201);
 	// Random daily missions pay coins: a placeholder keeps them out of tests that count
 	await setMissions(name, ['none']);
+	// Scratch tickets would come first on the Open page: tests that want them set them
+	await sql('UPDATE users SET tickets = 0 WHERE username = $1', [name]);
 	for (let i = 0; i < boosters; i++) {
 		expect((await page.request.post('/api/shop/boosters', { data: { collection } })).ok()).toBe(
 			true

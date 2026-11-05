@@ -43,9 +43,20 @@
 				session.coins = me.coins;
 				session.missions = me.missions;
 				session.pile = me.pile;
+				session.tickets = me.tickets;
 			})
 			.catch(() => {});
 	}
+	// A scratch ticket comes back every 20 minutes: the badge follows
+	onMount(() => {
+		const t = setInterval(() => {
+			const next = session.tickets?.next_at;
+			if (next && Date.parse(next) <= Date.now()) refreshMe();
+		}, 15_000);
+		return () => clearInterval(t);
+	});
+	/** What the Open tab waits with: packs and scratch tickets */
+	const toOpen = $derived(session.pile.length + (session.tickets?.count ?? 0));
 	onMount(() => {
 		live.start();
 		// New notifications: the count, and a toast unless the page already shows it
@@ -237,10 +248,8 @@
 			>
 				{#if tab.icon === 'open'}
 					<span class="pack-ico"><Icon name="open" /></span>
-					{#if session.pile.length}
-						<span class="badge" aria-label={i18n.t('nav.packs_waiting', { n: session.pile.length })}
-							>{session.pile.length}</span
-						>
+					{#if toOpen}
+						<span class="badge" aria-label={i18n.t('nav.to_open', { n: toOpen })}>{toOpen}</span>
 					{/if}
 				{:else}
 					<Icon name={tab.icon} />

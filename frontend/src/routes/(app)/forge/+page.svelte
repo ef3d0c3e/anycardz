@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import type { PageProps } from './$types';
 	import { getI18n } from '#lib/i18n/index.svelte.ts';
-	import { getCatalog, getToasts } from '#lib/session.svelte.ts';
+	import { getCatalog, getSession, getToasts } from '#lib/session.svelte.ts';
 	import { api, post } from '#lib/api.ts';
 	import { arp, burst, reducedMotion, sleep, tone } from '#lib/fx.ts';
 	import {
@@ -30,6 +30,7 @@
 	const i18n = getI18n();
 	const catalog = getCatalog()!;
 	const toasts = getToasts();
+	const session = getSession();
 
 	// Local copies: forging updates them without a reload
 	let owned = $state<Record<string, OwnedDto>>({});
@@ -223,7 +224,20 @@
 	const tCard = $derived(rTarget ? details[rTarget] : null);
 	const picking = $derived(choosing || !tCard);
 	const burnedRarities = $derived(burn.map((b) => details[b.slug].rarity));
-	const chance = $derived(tCard ? rouletteChance(tCard.rarity, burnedRarities) : 0);
+	/** Before a scratch ticket boost: what the burned cards bring, capped at 50% */
+	const rawChance = $derived(tCard ? rouletteChance(tCard.rarity, burnedRarities) : 0);
+	// Three sparkles on a scratch ticket: doubled, up to a sure win (the server applies it too)
+	let now = $state(Date.now());
+	$effect(() => {
+		const t = setInterval(() => (now = Date.now()), 30_000);
+		return () => clearInterval(t);
+	});
+	const boostUntil = $derived(
+		session.tickets?.boost_until && Date.parse(session.tickets.boost_until) > now
+			? session.tickets.boost_until
+			: null
+	);
+	const chance = $derived(boostUntil ? Math.min(rawChance * 2, 10_000) : rawChance);
 	const roAll = $derived(
 		picking
 			? cards.filter((c) => plainOf(c.slug) > 0).toSorted(byRarity)
@@ -272,7 +286,7 @@
 	}
 	function addBurn(slug: string) {
 		if (spinning || leftRO(slug) < 1) return;
-		if (chance >= ROULETTE_CAP) return toasts.show(i18n.t('forge.at_cap'));
+		if (rawChance >= ROULETTE_CAP) return toasts.show(i18n.t('forge.at_cap'));
 		if (burn.length >= ROULETTE_MAX_BURN) return;
 		outcome = null;
 		burn.push({ slug, foil: false });
@@ -626,8 +640,18 @@
 								p: pct(rouletteBonus(l.r))
 							})}
 						{/each}
+						{#if boostUntil}
+							<br /><span class="boost"
+								>{i18n.t('forge.boost', {
+									time: new Date(boostUntil).toLocaleTimeString(i18n.lang, {
+										hour: '2-digit',
+										minute: '2-digit'
+									})
+								})}</span
+							>
+						{/if}
 						<br />{i18n.t('forge.math_total', { p: pct(chance) })}
-						{#if chance >= ROULETTE_CAP}{i18n.t('forge.math_capped')}{/if}
+						{#if rawChance >= ROULETTE_CAP}{i18n.t('forge.math_capped')}{/if}
 						<br /><span class="stake"
 							>{burn.length
 								? i18n.t('forge.math_stake_burn', { name: tCard.title, n: burn.length })
@@ -1106,5 +1130,9 @@
 		border: 1.5px dashed var(--line);
 		border-radius: 12px;
 		text-align: center;
+	}
+	.boost {
+		font-weight: 700;
+		color: var(--legend);
 	}
 </style>
