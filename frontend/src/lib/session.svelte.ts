@@ -91,7 +91,8 @@ export class Toasts {
 	#next = 0;
 	show = (text: string, kind: Toast['kind'] = '') => {
 		const id = this.#next++;
-		this.list.push({ id, text, kind });
+		// A burst (a pack unlocking several achievements) shows the latest two
+		this.list = [...this.list.slice(-1), { id, text, kind }];
 		setTimeout(() => (this.list = this.list.filter((t) => t.id !== id)), 3400);
 	};
 }
