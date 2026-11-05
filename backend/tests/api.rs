@@ -1890,3 +1890,52 @@ async fn daily_missions_pay_once_and_all_three_give_a_pack() {
     notes.sort();
     assert_eq!(notes, vec!["bonus:0", "free_packs:100", "open_packs:150", "shop_sell:100"]);
 }
+
+#[actix_web::test]
+async fn scratch_tickets_refill_pay_and_boost_the_roulette() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("scratch");
+    let cookie = register(&app, &name).await;
+    let me = get(&app, "/api/me", &cookie).await.1;
+    assert_eq!(me["tickets"]["count"], 3);
+    assert_eq!(me["tickets"]["next_at"], Value::Null, "a full hand does not refill");
+
+    let mut coins = me["coins"].as_i64().unwrap();
+    for left in [2, 1, 0] {
+        let (s, r) = post(&app, "/api/tickets/scratch", &cookie, json!({})).await;
+        assert_eq!(s, 200, "{r}");
+        assert_eq!(r["tickets"]["count"], left);
+        assert_eq!(r["slots"].as_array().unwrap().len(), 3);
+        // What the response says is what happened
+        let won = r["coins_won"].as_i64().unwrap();
+        assert_eq!(r["coins"].as_i64().unwrap(), coins + won);
+        coins += won;
+        match r["prize"].as_str().unwrap() {
+            "pack" => assert!(r["pile"].as_array().unwrap().iter().any(|p| p == "*")),
+            "boost" => assert!(r["tickets"]["boost_until"].is_string()),
+            "jackpot" => assert_eq!(won, 1000),
+            "coins" => assert_eq!(won, 250),
+            "pair" => assert_eq!(won, 20),
+            other => assert_eq!((other, won), ("nothing", 0)),
+        }
+    }
+    let (s, err) = post(&app, "/api/tickets/scratch", &cookie, json!({})).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("no_ticket")));
+    assert!(get(&app, "/api/me", &cookie).await.1["tickets"]["next_at"].is_string());
+
+    // Forty minutes later: two are back
+    set_user(&ctx, &name, "tickets = 0, tickets_since = now() - interval '41 minutes'").await;
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["tickets"]["count"], 2);
+
+    // A boost doubles the roulette's chance: 5% + 2 rares at 2% = 9%, so 18%
+    let uid = get(&app, "/api/me", &cookie).await.1["id"].as_i64().unwrap();
+    give(&ctx, uid, "diamond", None, 2).await;
+    give(&ctx, uid, "garnet", None, 4).await;
+    let spin = json!({ "target": "diamond", "burn": [{ "card": "garnet", "count": 2 }] });
+    set_user(&ctx, &name, "roulette_boost_until = NULL").await;
+    assert_eq!(post(&app, "/api/forge/roulette", &cookie, spin.clone()).await.1["chance"], 900);
+    set_user(&ctx, &name, "roulette_boost_until = now() + interval '1 hour'").await;
+    give(&ctx, uid, "diamond", None, 1).await;
+    assert_eq!(post(&app, "/api/forge/roulette", &cookie, spin).await.1["chance"], 1800);
+}
