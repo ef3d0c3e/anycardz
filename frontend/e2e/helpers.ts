@@ -7,12 +7,28 @@ export async function newPlayer(page: Page, boosters = 0, collection = 'ww2-wars
 		data: { username: name, email: `${name}@example.com`, password: '123456789', terms: 1 }
 	});
 	expect(res.status()).toBe(201);
+	// Random daily missions pay coins: a placeholder keeps them out of tests that count
+	await setMissions(name, ['none']);
 	for (let i = 0; i < boosters; i++) {
 		expect((await page.request.post('/api/shop/boosters', { data: { collection } })).ok()).toBe(
 			true
 		);
 	}
 	return name;
+}
+
+/** Sets a player's missions for today (keys from the API's list) */
+export async function setMissions(name: string, keys: string[]) {
+	await sql(
+		'DELETE FROM daily_missions WHERE user_id = (SELECT id FROM users WHERE username = $1)',
+		[name]
+	);
+	await sql(
+		`INSERT INTO daily_missions (user_id, day, key)
+		 SELECT (SELECT id FROM users WHERE username = $1), (now() AT TIME ZONE 'utc')::date, k
+		 FROM unnest($2::text[]) k`,
+		[name, keys]
+	);
 }
 
 /** Picks the reel mode before the app loads, as the mode switch would */
