@@ -242,7 +242,7 @@ export default {
 	'forge.target_title': 'Choose the card to foil',
 	'forge.target_hint': 'Any card you own a plain copy of',
 	'forge.burn_title': 'Cards to burn',
-	'forge.burn_odds': 'Common +0.5% · rare +1% · legendary +2%',
+	'forge.burn_odds': 'Common +1% · rare +2% · legendary +4%',
 	'forge.at_cap': 'Already at the 50% cap',
 	'forge.won': 'It landed in the gold. {name} is now foil.',
 	'forge.lost_one': 'Missed the slice. {name} and 1 burned card were destroyed.',

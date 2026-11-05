@@ -243,7 +243,7 @@ const fr: Partial<Record<Key, string>> = {
 	'forge.target_title': 'Choisis la carte à faire briller',
 	'forge.target_hint': 'Toute carte dont tu as un exemplaire normal',
 	'forge.burn_title': 'Cartes à brûler',
-	'forge.burn_odds': 'Commune +0,5 % · rare +1 % · légendaire +2 %',
+	'forge.burn_odds': 'Commune +1 % · rare +2 % · légendaire +4 %',
 	'forge.at_cap': 'Déjà au plafond de 50 %',
 	'forge.won': 'Dans le mille ! {name} est maintenant brillante.',
 	'forge.lost_one': 'Raté. {name} et 1 carte brûlée ont été détruites.',

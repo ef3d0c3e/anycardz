@@ -140,9 +140,9 @@ pub const ROULETTE_MAX_BURN: i64 = 100;
 const fn roulette_odds(r: Rarity) -> (u32, u32) {
     // (chance of the rolled card on its own, bonus each burned card adds)
     match r {
-        Rarity::Common => (100, 50),
-        Rarity::Rare => (200, 100),
-        Rarity::Legendary => (500, 200),
+        Rarity::Common => (100, 100),
+        Rarity::Rare => (200, 200),
+        Rarity::Legendary => (500, 400),
     }
 }
 
@@ -329,13 +329,15 @@ mod tests {
     }
 
     #[test]
-    fn roulette_chances_match_the_old_rules() {
+    fn roulette_chances_follow_the_rules() {
         use Rarity::*;
         assert_eq!(roulette_chance(Common, &[]), 100);
         assert_eq!(roulette_chance(Legendary, &[]), 500);
-        assert_eq!(roulette_chance(Rare, &[Common, Rare, Legendary]), 200 + 50 + 100 + 200);
-        // 98 commons bring a common to the 50% cap
-        assert_eq!(roulette_chance(Common, &[Common; 98]), ROULETTE_CAP);
+        // Each burned card adds 1% (common), 2% (rare), 4% (legendary)
+        assert_eq!(roulette_chance(Rare, &[Common, Rare, Legendary]), 200 + 100 + 200 + 400);
+        // 49 commons bring a common to the 50% cap
+        assert_eq!(roulette_chance(Common, &[Common; 48]), 4900);
+        assert_eq!(roulette_chance(Common, &[Common; 49]), ROULETTE_CAP);
         assert_eq!(roulette_chance(Legendary, &[Legendary; 100]), ROULETTE_CAP);
     }
 

@@ -48,7 +48,7 @@ test('the roulette shows its odds, then wins a foil or destroys the card', async
 	await expect(page.locator('h1')).toContainText(legendary.title);
 	await expect(page.locator('.math')).toContainText('5%');
 	await page.locator('.tray .tcard').first().click();
-	await expect(page.locator('.math')).toContainText('5.5%');
+	await expect(page.locator('.math')).toContainText('6%');
 	await expect(page.locator('.math')).toContainText('+ 1 burned');
 
 	await page.locator('.spin').scrollIntoViewIfNeeded();

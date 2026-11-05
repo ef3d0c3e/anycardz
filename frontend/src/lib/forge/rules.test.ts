@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { needleAngle, ROULETTE_CAP, rouletteChance, spare, tradeupOdds, wedge } from './rules.ts';
 
 describe('roulette chance', () => {
-	// Same cases as backend/src/game.rs roulette_chances_match_the_old_rules
+	// Same cases as backend/src/game.rs roulette_chances_follow_the_rules
 	it('matches the server', () => {
 		expect(rouletteChance('common', [])).toBe(100);
 		expect(rouletteChance('legendary', [])).toBe(500);
-		expect(rouletteChance('rare', ['common', 'rare', 'legendary'])).toBe(200 + 50 + 100 + 200);
-		expect(rouletteChance('common', Array(98).fill('common'))).toBe(ROULETTE_CAP);
+		expect(rouletteChance('rare', ['common', 'rare', 'legendary'])).toBe(200 + 100 + 200 + 400);
+		expect(rouletteChance('common', Array(48).fill('common'))).toBe(4900);
+		expect(rouletteChance('common', Array(49).fill('common'))).toBe(ROULETTE_CAP);
 		expect(rouletteChance('legendary', Array(100).fill('legendary'))).toBe(ROULETTE_CAP);
 	});
 });

@@ -459,7 +459,7 @@ async fn roulette_burns_and_wins_or_destroys() {
         )
         .await;
         assert_eq!(s, 200, "{res}");
-        assert_eq!(res["chance"], 500 + 2 * 100);
+        assert_eq!(res["chance"], 500 + 2 * 200);
         let after = owned(&app, &cookie).await;
         assert_eq!(after.get("garnet").map(|g| g.0).unwrap_or(0), before["garnet"].0 - 2, "burned either way");
         let (d0, f0) = before["diamond"];
@@ -473,7 +473,7 @@ async fn roulette_burns_and_wins_or_destroys() {
             assert_eq!((d1, f1), (d0 - 1, f0), "lost: the copy is destroyed");
         }
     }
-    assert!(losses > 0, "7% odds should lose some of 40 spins");
+    assert!(losses > 0, "9% odds should lose some of 40 spins");
     let _ = wins;
 }
 

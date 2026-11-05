@@ -8,9 +8,9 @@ export const ROULETTE_MAX_BURN = 100;
 export const ABOVE: Partial<Record<Rarity, Rarity>> = { common: 'rare', rare: 'legendary' };
 
 const ODDS: Record<Rarity, [base: number, bonus: number]> = {
-	common: [100, 50],
-	rare: [200, 100],
-	legendary: [500, 200]
+	common: [100, 100],
+	rare: [200, 200],
+	legendary: [500, 400]
 };
 
 /** Chance in basis points (1/100 of a percent) */
