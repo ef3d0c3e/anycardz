@@ -89,6 +89,7 @@ pub async fn tradeup(
         source: crate::live::PullSource::Tradeup,
         at: chrono::Utc::now(),
     });
+    state.metrics.card("tradeup", target, false);
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "card": won, "rarity": target, "collection": rng_collection, "is_new": is_new, "copies": copies, "odds": odds,
     })))
@@ -152,6 +153,10 @@ pub async fn roulette(
         Ok(())
     })
     .await?;
+    state.metrics.roulette(won.is_some());
+    if won.is_some() {
+        state.metrics.card("roulette", target_rarity, true);
+    }
     if let Some(pattern) = won {
         state.live.pull(crate::live::PullEvent {
             user: user.username.clone(),

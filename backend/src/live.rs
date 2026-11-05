@@ -132,6 +132,12 @@ impl Hub {
         }
     }
 
+    /// Open sockets, and the users they belong to
+    pub fn counts(&self) -> (usize, usize) {
+        let online = self.online.lock().unwrap();
+        (online.values().sum(), online.len())
+    }
+
     pub fn is_online(&self, uid: i64) -> bool {
         self.online.lock().unwrap().contains_key(&uid)
     }

@@ -143,6 +143,7 @@ pub async fn register(
     // Every sign-up comes with coins: a few per address, then one every 10 minutes
     let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
     if let Some(wait) = state.limits.register_ip.wait(&ip) {
+        state.metrics.auth("register", "limited");
         return Err(ApiError::RetryAfter(wait));
     }
     validate_username(&username)?;
@@ -173,6 +174,8 @@ pub async fn register(
         Err(e) => return Err(e.into()),
     };
     drop(conn);
+    state.metrics.auth("register", "ok");
+    state.metrics.earned("signup", STARTING_COINS);
     start_session(&state, id, actix_web::http::StatusCode::CREATED).await
 }
 
@@ -190,11 +193,13 @@ pub async fn login(
     let limits = &state.limits;
     let wait = [limits.login_account.wait(&login), limits.login_ip.wait(&ip)].into_iter().flatten().max();
     if let Some(wait) = wait {
+        state.metrics.auth("login", "limited");
         return Err(ApiError::RetryAfter(wait));
     }
     let failed = || {
         limits.login_account.hit(&login);
         limits.login_ip.hit(&ip);
+        state.metrics.auth("login", "failed");
         ApiError::Invalid("invalid_credentials")
     };
     let mut conn = state.pool.get().await?;
@@ -217,6 +222,7 @@ pub async fn login(
     if !ok {
         return Err(failed());
     }
+    state.metrics.auth("login", "ok");
     start_session(&state, id, actix_web::http::StatusCode::OK).await
 }
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use actix_web::{App, HttpServer, middleware, web};
+use anycardz_api::metrics;
 use anycardz_api::{AppState, Catalog, Config, db, routes};
 use tracing_subscriber::EnvFilter;
 
@@ -25,20 +26,40 @@ async fn main() -> anyhow::Result<()> {
     let state = web::Data::new(AppState {
         pool,
         live: Default::default(),
+        metrics: Default::default(),
         limits,
         catalog: Arc::new(catalog),
         config: Arc::new(config),
     });
+    // Prometheus gets its own listener, kept off the public site
+    let scraper = match state.config.metrics_bind.clone() {
+        Some(addr) => {
+            let state = state.clone();
+            tracing::info!("metrics on http://{addr}/metrics");
+            let server = HttpServer::new(move || App::new().app_data(state.clone()).service(metrics::scrape))
+                .workers(1)
+                .bind(addr)?
+                .run();
+            Some(server)
+        }
+        None => None,
+    };
     tracing::info!("listening on http://{bind}");
-    HttpServer::new(move || {
+    let site = HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
+            .wrap(middleware::from_fn(metrics::track))
             .wrap(middleware::Compress::default())
             .wrap(tracing_actix_web::TracingLogger::default())
             .configure(routes::configure)
     })
     .bind(bind)?
-    .run()
-    .await?;
+    .run();
+    match scraper {
+        Some(scraper) => {
+            futures_util::future::try_join(site, scraper).await?;
+        }
+        None => site.await?,
+    }
     Ok(())
 }

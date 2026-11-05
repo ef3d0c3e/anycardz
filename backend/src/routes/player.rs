@@ -139,6 +139,8 @@ pub async fn buy_booster(
             }
         })
         .await?;
+    state.metrics.booster_bought(&body.collection);
+    state.metrics.spent("booster", BOOSTER_PRICE);
     Ok(HttpResponse::Ok().json(serde_json::json!({ "coins": coins, "pile": pile })))
 }
 
@@ -242,6 +244,10 @@ pub async fn open_booster(
         })
         .await?;
     let (collection, cards, pile) = result;
+    state.metrics.booster_opened(&collection);
+    for c in &cards {
+        state.metrics.card("pack", c.rarity, c.foil.is_some());
+    }
     for c in &cards {
         state.live.pull(crate::live::PullEvent {
             user: user.username.clone(),
@@ -296,6 +302,7 @@ pub async fn claim_streak(state: web::Data<AppState>, user: CurrentUser) -> ApiR
             }
         })
         .await?;
+    state.metrics.earned("streak", reward);
     let streak = streak_dto(&mut conn, uid).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "reward": reward, "coins": coins, "streak": streak })))
 }
@@ -398,5 +405,6 @@ pub async fn sell_card(
             Ok((coins, remaining))
         })
         .await?;
+    state.metrics.earned("sell", price);
     Ok(HttpResponse::Ok().json(serde_json::json!({ "coins": coins, "sold_for": price, "remaining": remaining })))
 }

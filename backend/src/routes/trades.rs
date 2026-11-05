@@ -459,6 +459,9 @@ pub async fn seal_trade(
     let t = find(&mut conn, id, uid, false).await?;
     state.live.trade(t.id, [t.from_id, t.to_id]);
     let kind = if t.state == "done" { Kind::TradeDone } else { Kind::TradeSealed };
+    if t.state == "done" {
+        state.metrics.trade("done");
+    }
     notify(&state, &mut conn, t.partner(uid), kind, uid, Some(t.id)).await?;
     Ok(HttpResponse::Ok().json(dto(&mut conn, &state.catalog, lang, t, uid).await?))
 }
@@ -534,6 +537,7 @@ pub async fn cancel_trade(
         Ok(())
     })
     .await?;
+    state.metrics.trade("cancelled");
     let t = find(&mut conn, id, uid, false).await?;
     state.live.trade(t.id, [t.from_id, t.to_id]);
     notify(&state, &mut conn, t.partner(uid), Kind::TradeCancelled, uid, Some(t.id)).await?;

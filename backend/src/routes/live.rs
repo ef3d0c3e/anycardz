@@ -194,6 +194,7 @@ pub async fn post_shout(
         .get_result(&mut conn)
         .await?;
     let event = ChatEvent { id, user: user.username, body: text, card, foil, at };
+    state.metrics.shout();
     state.live.chat(event.clone());
     Ok(HttpResponse::Created().json(event))
 }

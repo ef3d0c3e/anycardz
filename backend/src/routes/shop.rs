@@ -50,5 +50,6 @@ pub async fn topup(
             Ok(coins)
         })
         .await?;
+    state.metrics.earned("topup", pack.coins);
     Ok(HttpResponse::Ok().json(serde_json::json!({ "coins": coins, "added": pack.coins })))
 }
