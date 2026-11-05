@@ -187,7 +187,9 @@ p {
 	padding: 3px;
 	gap: 2px;
 }
-.seg button {
+.seg button,
+.seg a {
+	text-decoration: none;
 	border: 0;
 	background: none;
 	padding: 5px 12px;
@@ -196,7 +198,8 @@ p {
 	font-weight: 600;
 	color: var(--muted);
 }
-.seg button[aria-pressed='true'] {
+.seg button[aria-pressed='true'],
+.seg a[aria-current='page'] {
 	background: var(--ink);
 	color: var(--bg);
 }

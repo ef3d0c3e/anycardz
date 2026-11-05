@@ -233,3 +233,42 @@ export interface NotificationDto {
 	read: boolean;
 	at: string;
 }
+
+export type Metric =
+	'packs' | 'trades' | 'sets' | 'friends' | 'cards' | 'streak' | 'roulette_streak';
+
+export interface AchievementDto {
+	id: string;
+	coins: number;
+	metric: Metric | null;
+	goal: number | null;
+	/** The player's count now, for goals */
+	have: number | null;
+	earned_at: string | null;
+}
+
+export interface AchievementsDto {
+	items: AchievementDto[];
+	sets: number;
+	foil_sets: number;
+}
+
+export const BOARDS = ['sets', 'achievements', 'legendaries', 'foils', 'trades', 'streak'] as const;
+export type Board = (typeof BOARDS)[number];
+export type Period = 'week' | 'all';
+
+export interface RankDto {
+	rank: number;
+	username: string;
+	avatar: string | null;
+	value: number;
+	me: boolean;
+}
+
+export interface LeaderboardDto {
+	board: Board;
+	period: Period;
+	top: RankDto[];
+	/** The caller's row, null when not ranked */
+	me: RankDto | null;
+}

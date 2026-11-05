@@ -171,6 +171,8 @@
 									>{i18n.t('menu.requests', { n: session.friendRequests })}</span
 								>{/if}</a
 						>
+						<a href="/achievements">{i18n.t('menu.achievements')}</a>
+						<a href="/leaderboards">{i18n.t('menu.leaderboards')}</a>
 						<a href="/settings">{i18n.t('menu.settings')}</a>
 					</nav>
 					<p class="eyebrow">{i18n.t('menu.theme')}</p>
