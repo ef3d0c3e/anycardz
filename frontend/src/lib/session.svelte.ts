@@ -88,27 +88,61 @@ interface Toast {
 	id: number;
 	text: string;
 	kind: '' | 'warn';
+	/** The same message again while it shows: "×3" instead of three toasts */
+	count: number;
 }
+
 export class Toasts {
 	/** On screen: two at most, so a burst (a pack unlocking several achievements) never floods it */
 	list = $state<Toast[]>([]);
 	#waiting: Toast[] = [];
+	#timers = new Map<number, ReturnType<typeof setTimeout>>();
 	#next = 0;
 	static readonly VISIBLE = 2;
 	static readonly MS = 3400;
+	/** With others waiting, each stays less, so a queue drains in seconds */
+	static readonly BUSY_MS = 1600;
+	static readonly MAX_WAITING = 4;
 	show = (text: string, kind: Toast['kind'] = '') => {
-		this.#waiting.push({ id: this.#next++, text, kind });
+		const same = (t: Toast) => t.text === text && t.kind === kind;
+		const shown = this.list.find(same);
+		if (shown) {
+			this.list = this.list.map((t) => (t === shown ? { ...t, count: t.count + 1 } : t));
+			this.#schedule(shown.id);
+			return;
+		}
+		const queued = this.#waiting.find(same);
+		if (queued) {
+			queued.count++;
+			return;
+		}
+		this.#waiting.push({ id: this.#next++, text, kind, count: 1 });
+		// A long queue loses its oldest news, never a warning
+		while (this.#waiting.length > Toasts.MAX_WAITING) {
+			const i = this.#waiting.findIndex((t) => t.kind !== 'warn');
+			this.#waiting.splice(i < 0 ? 0 : i, 1);
+		}
 		this.#pump();
+		// Waiting news hurries the ones on screen
+		if (this.#waiting.length) for (const t of this.list) this.#schedule(t.id, Toasts.BUSY_MS);
 	};
+	#schedule(id: number, ms = this.#waiting.length ? Toasts.BUSY_MS : Toasts.MS) {
+		clearTimeout(this.#timers.get(id));
+		this.#timers.set(
+			id,
+			setTimeout(() => {
+				this.#timers.delete(id);
+				this.list = this.list.filter((x) => x.id !== id);
+				this.#pump();
+			}, ms)
+		);
+	}
 	/** The waiting ones take the free places, in order */
 	#pump() {
 		while (this.list.length < Toasts.VISIBLE && this.#waiting.length) {
 			const t = this.#waiting.shift()!;
 			this.list = [...this.list, t];
-			setTimeout(() => {
-				this.list = this.list.filter((x) => x.id !== t.id);
-				this.#pump();
-			}, Toasts.MS);
+			this.#schedule(t.id);
 		}
 	}
 }

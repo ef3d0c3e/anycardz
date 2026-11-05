@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { newPlayer, visit } from './helpers';
+import { hold, newPlayer, visit } from './helpers';
 
 const coins = (page: import('@playwright/test').Page) =>
 	page
@@ -145,4 +145,24 @@ test('the shelf stays short, the rest is one search away', async ({ page }) => {
 	// Remembered on the next visit
 	await page.reload();
 	await expect(page.locator('.shelf-item h3').first()).toHaveText(missing.title);
+});
+
+test('buying in a row makes one toast with a count, clear of the bars', async ({ page }) => {
+	await newPlayer(page);
+	await visit(page, '/');
+	const buy = page.locator('.shelf .buy').first();
+	await buy.scrollIntoViewIfNeeded();
+	for (let i = 0; i < 3; i++) {
+		await hold(page, buy, 800);
+		await expect(page.locator('[data-nav="open"] .badge')).toHaveText(String(i + 1));
+	}
+	const toast = page.locator('.toast', { hasText: /added to your pile/ });
+	await expect(toast).toHaveCount(1);
+	await expect(toast).toContainText('×3');
+	// Never over the header, never over the bottom bar on phones
+	const box = (await toast.boundingBox())!;
+	const header = (await page.locator('header.top').boundingBox())!;
+	expect(box.y).toBeGreaterThanOrEqual(header.y + header.height);
+	const nav = (await page.locator('nav.nav').boundingBox())!;
+	if (nav.y > header.y + header.height) expect(box.y + box.height).toBeLessThanOrEqual(nav.y);
 });

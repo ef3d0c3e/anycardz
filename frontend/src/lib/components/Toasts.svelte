@@ -5,15 +5,18 @@
 
 <div class="toasts" aria-live="polite">
 	{#each toasts.list as t (t.id)}
-		<div class="toast {t.kind}">{t.text}</div>
+		<div class="toast {t.kind}">
+			{t.text}{#if t.count > 1}<b class="count">×{t.count}</b>{/if}
+		</div>
 	{/each}
 </div>
 
 <style>
-	/* Phones: over the header, clear of the controls at the top of the screens */
+	/* Phones: just above the bottom bar, clear of the header and of the
+	   controls at the top of the screens */
 	.toasts {
 		position: fixed;
-		top: calc(8px + env(safe-area-inset-top, 0px));
+		bottom: calc(76px + env(safe-area-inset-bottom, 0px));
 		left: 50%;
 		translate: -50% 0;
 		z-index: 80;
@@ -27,7 +30,6 @@
 	/* Wider screens: the bottom left of the main column, away from the centred controls */
 	@media (min-width: 700px) {
 		.toasts {
-			top: auto;
 			bottom: 24px;
 			left: calc(86px + 16px);
 			translate: none;
@@ -45,22 +47,16 @@
 		animation: rise 0.3s cubic-bezier(0.2, 1.3, 0.4, 1);
 		text-align: center;
 	}
-	@media (max-width: 699px) {
-		.toast {
-			animation-name: drop;
-		}
-	}
 	@keyframes rise {
 		from {
 			opacity: 0;
 			transform: translateY(12px);
 		}
 	}
-	@keyframes drop {
-		from {
-			opacity: 0;
-			transform: translateY(-12px);
-		}
+	.count {
+		margin-left: 8px;
+		font-family: var(--mono);
+		opacity: 0.8;
 	}
 	.toast.warn {
 		background: var(--warn);
