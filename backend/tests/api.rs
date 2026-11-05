@@ -38,6 +38,8 @@ async fn ctx() -> Option<Ctx> {
         trusted_proxies: Vec::new(),
         metrics_bind: None,
         metrics_token: None,
+        operator: None,
+        contact: None,
     };
     let catalog = Catalog::load(&config.data_dir, false).unwrap();
     let state = AppState {
@@ -75,7 +77,9 @@ where
 {
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+        .set_json(
+            json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789", "terms": 1 }),
+        )
         .to_request();
     let res = test::call_service(app, req).await;
     assert_eq!(res.status(), 201);
@@ -119,7 +123,7 @@ async fn register_login_logout() {
     // Same name in another case is taken
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(json!({ "username": name.to_uppercase(), "email": format!("other{name}@example.com"), "password": "123456789" }))
+        .set_json(json!({ "username": name.to_uppercase(), "email": format!("other{name}@example.com"), "password": "123456789", "terms": 1 }))
         .to_request();
     let res = test::call_service(&app, req).await;
     assert_eq!(res.status(), 409);
@@ -155,6 +159,8 @@ async fn validation_errors() {
         (json!({ "username": unique("u"), "email": "nope", "password": "123456789" }), "invalid_email"),
         (json!({ "username": unique("u"), "email": "a@b.co", "password": "short" }), "weak_password"),
         (json!({ "username": 3 }), "invalid_body"),
+        (json!({ "username": unique("u"), "email": "a@b.co", "password": "123456789" }), "terms_required"),
+        (json!({ "username": unique("u"), "email": "a@b.co", "password": "123456789", "terms": 0 }), "terms_required"),
     ] {
         let (status, err) = post(&app, "/api/auth/register", &anon, payload).await;
         assert_eq!((status, err["error"].as_str()), (422, Some(code)));
@@ -680,7 +686,7 @@ async fn live_socket_pushes_events() {
         let name = unique(p);
         let res = client
             .post(srv.url("/api/auth/register"))
-            .send_json(&json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .send_json(&json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789", "terms": 1 }))
             .await
             .unwrap();
         let cookie = res.cookie("session").unwrap().into_owned();
@@ -976,7 +982,7 @@ async fn auth_rate_limits() {
         test::TestRequest::post()
             .uri("/api/auth/register")
             .peer_addr(format!("{ip}:4000").parse().unwrap())
-            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789", "terms": 1 }))
             .to_request()
     };
     // Sign-ups: five per address, then wait; another address is unaffected
@@ -993,7 +999,7 @@ async fn auth_rate_limits() {
         test::TestRequest::post()
             .uri("/api/auth/register")
             .peer_addr("192.0.2.50:4000".parse().unwrap())
-            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789" }))
+            .set_json(json!({ "username": name, "email": format!("{name}@example.com"), "password": "123456789", "terms": 1 }))
             .to_request(),
     )
     .await;
@@ -1072,4 +1078,186 @@ async fn metrics_count_requests_and_game_events() {
         .map(|l| l.rsplit(' ').next().unwrap().parse::<u64>().unwrap())
         .sum();
     assert_eq!(pulled, 5, "one pack, five cards");
+}
+
+/// Logs in from a "device" (user agent); the session cookie, or the status
+async fn login_as<S>(app: &S, login: &str, password: &str, device: &str) -> Result<Cookie<'static>, u16>
+where
+    S: Service<actix_http::Request, Response = ServiceResponse, Error = actix_web::Error>,
+{
+    let req = test::TestRequest::post()
+        .uri("/api/auth/login")
+        .insert_header(("user-agent", device))
+        .set_json(json!({ "login": login, "password": password }))
+        .to_request();
+    let res = test::call_service(app, req).await;
+    if res.status() == 200 { Ok(session(&res)) } else { Err(res.status().as_u16()) }
+}
+
+#[actix_web::test]
+async fn password_email_and_sessions() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let name = unique("acct");
+    let laptop = register(&app, &name).await;
+    let phone = login_as(&app, &name, "123456789", "Phone browser").await.unwrap();
+
+    // Both devices are listed, each knows which one it is
+    let (_, list) = get(&app, "/api/account/sessions", &phone).await;
+    let list = list.as_array().unwrap();
+    assert_eq!(list.len(), 2);
+    let me = list.iter().find(|s| s["current"] == true).unwrap();
+    assert_eq!(me["user_agent"], "Phone browser");
+
+    // A wrong current password changes nothing
+    let (s, err) =
+        post(&app, "/api/account/password", &laptop, json!({ "current": "nope-nope", "new": "brand-new-pass" })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("wrong_password")));
+    let (s, err) =
+        post(&app, "/api/account/password", &laptop, json!({ "current": "123456789", "new": "short" })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("weak_password")));
+
+    // The change signs every other device out, not this one
+    let (s, _) =
+        post(&app, "/api/account/password", &laptop, json!({ "current": "123456789", "new": "brand-new-pass" })).await;
+    assert_eq!(s, 200);
+    assert_eq!(get(&app, "/api/me", &phone).await.0, 401);
+    assert_eq!(get(&app, "/api/me", &laptop).await.0, 200);
+    assert_eq!(login_as(&app, &name, "123456789", "x").await.unwrap_err(), 422);
+    let tablet = login_as(&app, &name, "brand-new-pass", "Tablet").await.unwrap();
+
+    // One device out by id; someone else's session cannot be touched
+    let (_, list) = get(&app, "/api/account/sessions", &laptop).await;
+    let tablet_id =
+        list.as_array().unwrap().iter().find(|s| s["user_agent"] == "Tablet").unwrap()["id"].as_i64().unwrap();
+    let other = register(&app, &unique("other")).await;
+    assert_eq!(del(&app, &format!("/api/account/sessions/{tablet_id}"), &other).await.0, 404);
+    assert_eq!(get(&app, "/api/me", &tablet).await.0, 200);
+    assert_eq!(del(&app, &format!("/api/account/sessions/{tablet_id}"), &laptop).await.0, 200);
+    assert_eq!(get(&app, "/api/me", &tablet).await.0, 401);
+
+    // Signing the others out keeps the current one
+    let a = login_as(&app, &name, "brand-new-pass", "A").await.unwrap();
+    let (s, r) = post(&app, "/api/account/sessions/revoke-others", &laptop, json!({})).await;
+    assert_eq!((s, r["signed_out"].as_i64()), (200, Some(1)));
+    assert_eq!(get(&app, "/api/me", &a).await.0, 401);
+    assert_eq!(get(&app, "/api/me", &laptop).await.0, 200);
+
+    // Email: password needed, format checked, unique whatever the case
+    let (s, err) =
+        post(&app, "/api/account/email", &laptop, json!({ "password": "wrong-wrong", "email": "x@y.co" })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("wrong_password")));
+    let (s, err) =
+        post(&app, "/api/account/email", &laptop, json!({ "password": "brand-new-pass", "email": "nope" })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("invalid_email")));
+    let (_, them) = get(&app, "/api/me", &other).await;
+    let taken = them["email"].as_str().unwrap().to_uppercase();
+    let (s, err) =
+        post(&app, "/api/account/email", &laptop, json!({ "password": "brand-new-pass", "email": taken })).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("email_taken")));
+    let fresh = format!("{name}@new.example.com");
+    let (s, _) =
+        post(&app, "/api/account/email", &laptop, json!({ "password": "brand-new-pass", "email": fresh })).await;
+    assert_eq!(s, 200);
+    assert!(login_as(&app, &fresh, "brand-new-pass", "B").await.is_ok());
+}
+
+#[actix_web::test]
+async fn terms_are_accepted_at_sign_up_and_again_when_outdated() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let anon = Cookie::new("none", "");
+    let (_, legal) = get(&app, "/api/legal", &anon).await;
+    let version = legal["version"].as_i64().unwrap();
+
+    let name = unique("terms");
+    let cookie = register(&app, &name).await;
+    let (_, me) = get(&app, "/api/me", &cookie).await;
+    assert_eq!(me["terms_outdated"], false);
+
+    // An account from before the terms (or an older version) is asked again
+    {
+        use schema::users::dsl as u;
+        let mut conn = ctx.state.pool.get().await.unwrap();
+        diesel::update(u::users.filter(u::username.eq(&name)))
+            .set(u::terms_version.eq(None::<i32>))
+            .execute(&mut conn)
+            .await
+            .unwrap();
+    }
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["terms_outdated"], true);
+    let (s, err) = post(&app, "/api/legal/accept", &cookie, json!({ "version": version + 1 })).await;
+    assert_eq!((s, err["error"].as_str()), (409, Some("terms_changed")));
+    assert_eq!(post(&app, "/api/legal/accept", &cookie, json!({ "version": version })).await.0, 200);
+    assert_eq!(get(&app, "/api/me", &cookie).await.1["terms_outdated"], false);
+}
+
+#[actix_web::test]
+async fn export_holds_the_players_data() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, _)) = pair(&app).await;
+    give(&ctx, a_id, "garnet", Some("foil4"), 1).await;
+    let (s, r) = post(&app, "/api/shoutbox", &a, json!({ "body": "hello export" })).await;
+    assert!(s < 300, "{r}");
+    let (_, t) = post(&app, "/api/trades", &a, json!({ "with": b_name })).await;
+    let id = t["id"].as_i64().unwrap();
+    let edit = json!({ "version": 1, "give": [{ "card": "garnet", "foil": true, "count": 1 }] });
+    let (s, r) = put(&app, &format!("/api/trades/{id}"), &a, edit).await;
+    assert_eq!(s, 200, "{r}");
+    post(&app, &format!("/api/friends/{b_name}"), &a, json!({})).await;
+
+    let res =
+        test::call_service(&app, test::TestRequest::get().uri("/api/account/export").cookie(a.clone()).to_request())
+            .await;
+    assert_eq!(res.status(), 200);
+    let disposition = res.headers().get("content-disposition").unwrap().to_str().unwrap().to_owned();
+    assert!(disposition.starts_with("attachment;") && disposition.contains(&a_name), "{disposition}");
+    let data = body(res).await;
+    assert_eq!(data["account"]["username"], a_name);
+    assert_eq!(data["account"]["terms"]["version"], 1);
+    assert_eq!(data["cards"][0]["card"], "garnet");
+    assert_eq!(data["cards"][0]["foil"], "foil4");
+    assert_eq!(data["shoutbox_messages"][0]["body"], "hello export");
+    assert_eq!(data["trades"][0]["partner"], b_name);
+    assert_eq!(data["friends"][0]["player"], b_name);
+    assert_eq!(data["friends"][0]["requested_by_you"], true);
+    assert!(data["sessions"].as_array().unwrap().len() == 1);
+    assert!(data.to_string().find("password").is_none(), "no hashes, no tokens");
+    let _ = b;
+}
+
+#[actix_web::test]
+async fn deleting_an_account_removes_it_and_its_trades() {
+    let Some(ctx) = ctx().await else { return };
+    let app = app!(ctx);
+    let ((a_name, a, a_id), (b_name, b, _)) = pair(&app).await;
+    give(&ctx, a_id, "garnet", None, 1).await;
+    let (_, t) = post(&app, "/api/trades", &b, json!({ "with": a_name })).await;
+    let id = t["id"].as_i64().unwrap();
+
+    let (s, err) =
+        post(&app, "/api/account/delete", &a, json!({ "password": "123456789", "confirm": "someone" })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("confirm_username")));
+    let (s, err) = post(&app, "/api/account/delete", &a, json!({ "password": "wrong-wrong", "confirm": a_name })).await;
+    assert_eq!((s, err["error"].as_str()), (422, Some("wrong_password")));
+    assert_eq!(get(&app, "/api/me", &a).await.0, 200, "still there");
+
+    let req = test::TestRequest::post()
+        .uri("/api/account/delete")
+        .cookie(a.clone())
+        .set_json(json!({ "password": "123456789", "confirm": a_name.to_uppercase() }))
+        .to_request();
+    let res = test::call_service(&app, req).await;
+    assert_eq!(res.status(), 200);
+    let cleared = res.response().cookies().find(|c| c.name() == "session").unwrap();
+    assert_eq!(cleared.value(), "");
+
+    assert_eq!(get(&app, "/api/me", &a).await.0, 401);
+    assert_eq!(login_as(&app, &a_name, "123456789", "x").await.unwrap_err(), 422);
+    assert_eq!(get(&app, &format!("/api/trades/{id}"), &b).await.0, 404);
+    assert_eq!(get(&app, &format!("/api/players/{a_name}"), &b).await.0, 404);
+    // The name is free again
+    register(&app, &a_name).await;
+    let _ = b_name;
 }
