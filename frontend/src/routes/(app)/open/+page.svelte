@@ -5,7 +5,13 @@
 	import { api, artUrl, post } from '#lib/api.ts';
 	import { arp, burst, reducedMotion, sleep, tone } from '#lib/fx.ts';
 	import { tilt } from '#lib/actions/tilt.ts';
-	import type { CardDto, CollectionDto, OpenedDto, Rarity } from '#lib/types.ts';
+	import {
+		FREE_PACK,
+		type CardDto,
+		type CollectionDto,
+		type OpenedDto,
+		type Rarity
+	} from '#lib/types.ts';
 	import Card from '#lib/components/Card.svelte';
 	import Pack from '#lib/components/Pack.svelte';
 	import { getLive } from '#lib/live.svelte.ts';
@@ -121,9 +127,18 @@
 		hint = i18n.t('open.tear_hint');
 		// Reel fillers: cards of the set, fetched while the player tears
 		fillers = [];
-		api<CollectionDto>(`/collections/${slug}`)
-			.then((c) => (fillers = c.cards ?? []))
+		fetchFillers(slug)
+			.then((cards) => (fillers = cards))
 			.catch(() => {});
+	}
+
+	/** Cards that spin past on the reels. A free pack draws from everything:
+	 * a few collections picked at random stand for the whole catalog. */
+	async function fetchFillers(slug: string): Promise<CardDto[]> {
+		if (slug !== FREE_PACK) return (await api<CollectionDto>(`/collections/${slug}`)).cards ?? [];
+		const picks = [...catalog.collections].sort(() => Math.random() - 0.5).slice(0, 3);
+		const sets = await Promise.all(picks.map((c) => api<CollectionDto>(`/collections/${c.slug}`)));
+		return sets.flatMap((c) => c.cards ?? []);
 	}
 
 	// ---- tear strip ----
@@ -165,7 +180,7 @@
 				post<OpenedDto>('/pile/open', { collection: slug }),
 				fillers.length
 					? Promise.resolve({ ...collection, cards: fillers })
-					: api<CollectionDto>(`/collections/${slug}`),
+					: fetchFillers(slug).then((cards) => ({ ...collection!, cards })),
 				sleep(700)
 			]).then(([o, c]) => [o, c] as const);
 		} catch (e) {
@@ -174,8 +189,17 @@
 			return;
 		}
 		session.pile = opened.pile;
+		session.pityLeft = opened.pity_left;
 		fillers = full.cards ?? [];
 		const bySlug = new Map(fillers.map((c) => [c.slug, c]));
+		// From a free pack, the won cards may come from collections not fetched
+		const missing = opened.cards.map((p) => p.card).filter((s) => !bySlug.has(s));
+		if (missing.length) {
+			const found = await api<Record<string, CardDto>>(
+				`/cards?slugs=${missing.map(encodeURIComponent).join(',')}`
+			).catch(() => ({}) as Record<string, CardDto>);
+			for (const c of Object.values(found)) bySlug.set(c.slug, c);
+		}
 		pulled = opened.cards.flatMap((p) => {
 			const card = bySlug.get(p.card);
 			return card ? [{ card, foil: p.foil, isNew: p.is_new, copies: p.copies }] : [];
@@ -353,6 +377,9 @@
 					{i18n.t('open.pile_count', { n: session.pile.length + (phase === 'sealed' ? 0 : 1) })}
 				</p>
 				<h1>{collection.title}</h1>
+				<p class="pity" title={i18n.t('pity.hint')}>
+					{i18n.t('pity.left', { n: session.pityLeft })}
+				</p>
 			{/if}
 		</div>
 		<div class="open-ctrls">
@@ -484,7 +511,9 @@
 					{:else}
 						<a class="btn primary" href="/">{i18n.t('open.buy_more')}</a>
 					{/if}
-					<a class="btn" href="/binder?set={collection?.slug}">{i18n.t('open.see_binder')}</a>
+					<a class="btn" href={collection?.free ? '/binder' : `/binder?set=${collection?.slug}`}
+						>{i18n.t('open.see_binder')}</a
+					>
 					{#if best}
 						<button
 							type="button"
@@ -515,6 +544,11 @@
 </div>
 
 <style>
+	.pity {
+		font-size: 12.5px;
+		color: rgba(238, 240, 255, 0.62);
+		margin-top: 2px;
+	}
 	.felt {
 		position: relative;
 		min-height: 100%;

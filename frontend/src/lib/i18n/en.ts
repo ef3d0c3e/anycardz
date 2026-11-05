@@ -473,5 +473,17 @@ export default {
 	'errors.terms_required': 'Accept the terms of service and privacy notice to create an account.',
 	'errors.terms_changed': 'The terms changed again. Reload the page to read the new version.',
 	'errors.confirm_username': 'Type your username exactly to confirm.',
-	'errors.unknown_session': 'That device is already signed out.'
+	'errors.unknown_session': 'That device is already signed out.',
+
+	'free.pack': 'Free pack',
+	'free.meta': '5 cards · any collection',
+	'free.title': 'Free packs',
+	'free.lead': '{n} packs drawn from every collection, every {h} hours.',
+	'free.claim': 'Claim {n} free packs',
+	'free.next': 'Next ones in {time}',
+	'free.added': '{n} free packs added to your pile',
+	'errors.free_packs_not_ready': 'Your free packs are not ready yet.',
+	'pity.left_one': 'Legendary guaranteed in this pack',
+	'pity.left_other': 'Legendary guaranteed within {n} packs',
+	'pity.hint': 'Every pack without a legendary brings the guaranteed one closer.'
 } as const;

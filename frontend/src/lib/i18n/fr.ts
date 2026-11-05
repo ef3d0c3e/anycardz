@@ -436,10 +436,10 @@ const fr: Partial<Record<Key, string>> = {
 	'legal.privacy_link': 'politique de confidentialité',
 	'legal.changed.title': 'Les conditions ont changé',
 	'legal.changed.lead':
-		'Lisez les nouvelles {terms} et la {privacy}, puis acceptez-les pour continuer à jouer.',
+		'Lis les nouvelles {terms} et la {privacy}, puis accepte-les pour continuer à jouer.',
 	'legal.changed.accept': 'J’accepte',
 	'legal.changed.alternative':
-		'Pas d’accord ? Vous pouvez quand même télécharger vos données et supprimer votre compte :',
+		'Pas d’accord ? Tu peux quand même télécharger tes données et supprimer ton compte :',
 	'settings.title': 'Réglages',
 	'settings.email.title': 'Adresse e-mail',
 	'settings.email.current': 'Adresse actuelle : {email}',
@@ -450,10 +450,10 @@ const fr: Partial<Record<Key, string>> = {
 	'settings.password.current': 'Mot de passe actuel',
 	'settings.password.new': 'Nouveau mot de passe',
 	'settings.password.submit': 'Changer le mot de passe',
-	'settings.password.done': 'Mot de passe modifié. Vos autres appareils sont déconnectés.',
-	'settings.password.confirm': 'Votre mot de passe, pour confirmer',
+	'settings.password.done': 'Mot de passe modifié. Tes autres appareils sont déconnectés.',
+	'settings.password.confirm': 'Ton mot de passe, pour confirmer',
 	'settings.sessions.title': 'Appareils',
-	'settings.sessions.lead': 'Là où votre compte est connecté.',
+	'settings.sessions.lead': 'Là où ton compte est connecté.',
 	'settings.sessions.this': 'Cet appareil',
 	'settings.sessions.seen': 'Actif {ago}',
 	'settings.sessions.since': 'Connecté le {date}',
@@ -462,22 +462,34 @@ const fr: Partial<Record<Key, string>> = {
 	'settings.sessions.revoke_others': 'Déconnecter tous les autres appareils',
 	'settings.sessions.revoked_one': '1 appareil déconnecté.',
 	'settings.sessions.revoked_other': '{n} appareils déconnectés.',
-	'settings.data.title': 'Vos données',
+	'settings.data.title': 'Tes données',
 	'settings.data.lead':
-		'Tout ce qu’AnyCardz conserve sur vous, en un fichier JSON : compte, cartes, échanges, messages, amis, sessions.',
+		'Tout ce qu’AnyCardz conserve sur toi, en un fichier JSON : compte, cartes, échanges, messages, amis, sessions.',
 	'settings.data.export': 'Télécharger mes données',
 	'settings.legal.title': 'Conditions et confidentialité',
 	'settings.delete.title': 'Supprimer le compte',
 	'settings.delete.lead':
-		'Votre compte, vos cartes, échanges, messages et amis sont supprimés immédiatement. Impossible de revenir en arrière.',
-	'settings.delete.confirm': 'Tapez votre pseudo, {name}, pour confirmer',
+		'Ton compte, tes cartes, échanges, messages et amis sont supprimés immédiatement. Impossible de revenir en arrière.',
+	'settings.delete.confirm': 'Tape ton pseudo, {name}, pour confirmer',
 	'settings.delete.submit': 'Supprimer mon compte définitivement',
-	'errors.wrong_password': 'Ce n’est pas votre mot de passe actuel.',
+	'errors.wrong_password': 'Ce n’est pas ton mot de passe actuel.',
 	'errors.terms_required':
-		'Acceptez les conditions d’utilisation et la politique de confidentialité pour créer un compte.',
+		'Accepte les conditions d’utilisation et la politique de confidentialité pour créer un compte.',
 	'errors.terms_changed':
-		'Les conditions ont encore changé. Rechargez la page pour lire la nouvelle version.',
-	'errors.confirm_username': 'Tapez votre pseudo exactement pour confirmer.',
-	'errors.unknown_session': 'Cet appareil est déjà déconnecté.'
+		'Les conditions ont encore changé. Recharge la page pour lire la nouvelle version.',
+	'errors.confirm_username': 'Tape ton pseudo exactement pour confirmer.',
+	'errors.unknown_session': 'Cet appareil est déjà déconnecté.',
+
+	'free.pack': 'Pack gratuit',
+	'free.meta': '5 cartes · toutes collections',
+	'free.title': 'Packs gratuits',
+	'free.lead': '{n} packs tirés de toutes les collections, toutes les {h} heures.',
+	'free.claim': 'Récupérer {n} packs gratuits',
+	'free.next': 'Les prochains dans {time}',
+	'free.added': '{n} packs gratuits ajoutés à ta pile',
+	'errors.free_packs_not_ready': 'Tes packs gratuits ne sont pas encore prêts.',
+	'pity.left_one': 'Légendaire garantie dans ce pack',
+	'pity.left_other': 'Légendaire garantie d’ici {n} packs',
+	'pity.hint': 'Chaque pack sans légendaire rapproche la légendaire garantie.'
 };
 export default fr;

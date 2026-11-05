@@ -8,7 +8,13 @@
 </script>
 
 <!-- A booster: the set's featured card behind a glossy wrapper -->
-<div class="pack" style:--cp={collection.primary} style:--cs={collection.secondary} {style}>
+<div
+	class="pack"
+	class:free={collection.free}
+	style:--cp={collection.primary}
+	style:--cs={collection.secondary}
+	{style}
+>
 	<div class="pk">
 		<span class="crimp t"></span>
 		<div class="pk-head">
@@ -18,7 +24,9 @@
 		<div class="pk-feature">
 			<div class="pk-card"><Card card={collection.featured} foil="foil3" /></div>
 		</div>
-		<span class="pk-meta">{i18n.t('pack.meta', { n: collection.total })}</span>
+		<span class="pk-meta"
+			>{collection.free ? i18n.t('free.meta') : i18n.t('pack.meta', { n: collection.total })}</span
+		>
 		<span class="pk-gloss"></span>
 		<span class="crimp b"></span>
 	</div>

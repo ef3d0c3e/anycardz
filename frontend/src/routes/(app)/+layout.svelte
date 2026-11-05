@@ -55,6 +55,9 @@
 		session.update(data.me);
 		catalog.collections = data.collections;
 	});
+	$effect(() => {
+		catalog.freeTitle = i18n.t('free.pack');
+	});
 
 	let menuOpen = $state(false);
 	let searching = $state(false);

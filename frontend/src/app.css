@@ -504,6 +504,13 @@ p {
 }
 
 /* ---------- pack ---------- */
+/* The free pack: every collection at once, so every colour at once */
+.pack.free .pk {
+	background:
+		linear-gradient(165deg, #6d4cff, #ff4fa3 45%, #ffb347 75%, #3ee6b5),
+		url('/api/assets/wrapper1.jpg') center/70cqi;
+	background-blend-mode: multiply;
+}
 .pack {
 	position: relative;
 	width: 100%;

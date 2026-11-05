@@ -25,6 +25,8 @@ export interface CollectionDto {
 	rarities?: Partial<Record<Rarity, number>>;
 	featured: CardDto;
 	cards?: CardDto[];
+	/** The free pack stand-in (slug FREE_PACK), not a real collection */
+	free?: boolean;
 }
 
 export interface StreakDto {
@@ -50,7 +52,21 @@ export interface MeDto {
 	streak: StreakDto;
 	/** The current terms are not accepted yet: asked before playing on */
 	terms_outdated: boolean;
+	free_packs: FreePacksDto;
+	/** Packs to open before a legendary is guaranteed, the next one included */
+	pity_left: number;
 }
+
+export interface FreePacksDto {
+	ready: boolean;
+	/** When they are claimable, if not now */
+	next_at: string | null;
+	count: number;
+	every_hours: number;
+}
+
+/** The pile entry of a free pack: it draws from every collection */
+export const FREE_PACK = '*';
 
 export interface OwnedDto {
 	card: string;
@@ -79,6 +95,8 @@ export interface OpenedDto {
 	collection: string;
 	cards: PulledDto[];
 	pile: string[];
+	/** Packs to the guaranteed legendary after this one */
+	pity_left: number;
 }
 
 export interface TradeLine {

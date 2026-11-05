@@ -5,7 +5,7 @@
 	import { getCatalog, getSession, getToasts } from '#lib/session.svelte.ts';
 	import { post } from '#lib/api.ts';
 	import { arp, flyCoins, flyTo, tone } from '#lib/fx.ts';
-	import type { StreakDto } from '#lib/types.ts';
+	import type { FreePacksDto, StreakDto } from '#lib/types.ts';
 	import Pack from '#lib/components/Pack.svelte';
 	import HoldButton from '#lib/components/HoldButton.svelte';
 	import ScratchTicket from '#lib/components/ScratchTicket.svelte';
@@ -57,8 +57,47 @@
 			.join(':');
 	};
 	tick();
-	const timer = setInterval(tick, 1000);
+	const timer = setInterval(() => {
+		tick();
+		freeTick();
+	}, 1000);
 	onDestroy(() => clearInterval(timer));
+
+	// ---- free packs, twice a day ----
+	let freeLeft = $state('');
+	let claimingFree = $state(false);
+	let freeEl = $state<HTMLElement>();
+	function freeTick() {
+		const next = session.freePacks.next_at;
+		if (!next) return;
+		const s = Math.max(0, Math.floor((new Date(next).getTime() - Date.now()) / 1000));
+		// Time is up: the button comes back without a reload
+		if (s === 0) session.freePacks = { ...session.freePacks, ready: true, next_at: null };
+		const h = Math.floor(s / 3600);
+		const m = Math.floor(s / 60) % 60;
+		freeLeft = h
+			? `${h} h ${String(m).padStart(2, '0')} min`
+			: `${m} min ${String(s % 60).padStart(2, '0')} s`;
+	}
+	freeTick();
+	async function claimFree() {
+		if (claimingFree) return;
+		claimingFree = true;
+		try {
+			const res = await post<{ pile: string[]; free_packs: FreePacksDto }>('/free-packs/claim');
+			session.freePacks = res.free_packs;
+			freeTick();
+			arp([520, 660, 780]);
+			const target = document.querySelector('[data-nav="open"]');
+			if (target && freeEl) await flyTo(freeEl, target);
+			session.pile = res.pile;
+			toasts.show(i18n.t('free.added', { n: res.free_packs.count }));
+		} catch (e) {
+			toasts.show(i18n.error(e), 'warn');
+		} finally {
+			claimingFree = false;
+		}
+	}
 
 	// ---- shelf: a short list, the rest behind the set picker ----
 	let recent = $state<string[]>([]);
@@ -147,6 +186,28 @@
 				</h2>
 				<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
 				{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
+			</div>
+			<div class="free-strip" aria-labelledby="free-title">
+				<div class="free-text">
+					<h3 id="free-title">{i18n.t('free.title')}</h3>
+					<p>
+						{session.freePacks.ready
+							? i18n.t('free.lead', {
+									n: session.freePacks.count,
+									h: session.freePacks.every_hours
+								})
+							: i18n.t('free.next', { time: freeLeft })}
+					</p>
+				</div>
+				{#if session.freePacks.ready}
+					<button
+						type="button"
+						class="btn free-claim"
+						bind:this={freeEl}
+						disabled={claimingFree}
+						onclick={claimFree}>{i18n.t('free.claim', { n: session.freePacks.count })}</button
+					>
+				{/if}
 			</div>
 		</section>
 
@@ -289,12 +350,37 @@
 	}
 	.pile-hero {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 22px;
 		align-items: center;
 		background: radial-gradient(ellipse at 20% 50%, var(--felt-hi), var(--felt) 75%);
 		color: var(--felt-ink);
 		border: 0;
 		overflow: hidden;
+	}
+	.free-strip {
+		flex-basis: 100%;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px 16px;
+		padding-top: 14px;
+		border-top: 1px solid rgba(255, 255, 255, 0.12);
+	}
+	.free-text h3 {
+		font-size: 15px;
+	}
+	.free-text p {
+		font-size: 13.5px;
+		color: rgba(238, 240, 255, 0.72);
+		margin-top: 2px;
+	}
+	.free-claim {
+		background: linear-gradient(110deg, #6d4cff, #ff4fa3 60%, #ffb347);
+		border-color: transparent;
+		color: #fff;
+		box-shadow: 0 6px 18px -6px rgba(255, 79, 163, 0.7);
 	}
 	.pile-hero .eyebrow {
 		color: rgba(238, 240, 255, 0.6);
@@ -350,6 +436,7 @@
 		flex: none;
 	}
 	.pile-text {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
