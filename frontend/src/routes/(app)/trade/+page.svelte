@@ -5,6 +5,7 @@
 	import { getToasts } from '#lib/session.svelte.ts';
 	import { api, post } from '#lib/api.ts';
 	import type { TradeDto } from '#lib/types.ts';
+	import TradeTabs from '#lib/components/TradeTabs.svelte';
 
 	let { data }: PageProps = $props();
 	const i18n = getI18n();
@@ -46,6 +47,7 @@
 <svelte:head><title>{i18n.t('trades.title')} · AnyCardz</title></svelte:head>
 
 <div class="screen">
+	<TradeTabs />
 	<div>
 		<h1>{i18n.t('trades.title')}</h1>
 		<p class="lead">{i18n.t('trades.lead')}</p>

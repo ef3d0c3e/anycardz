@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { afterNavigate, refreshAll } from '$app/navigation';
+	import { afterNavigate, invalidate, refreshAll } from '$app/navigation';
 	import type { LayoutProps } from './$types';
 	import { getI18n, LANGS, type Lang } from '#lib/i18n/index.svelte.ts';
 	import { getTheme, setCookie, THEMES } from '#lib/theme.svelte.ts';
@@ -18,7 +18,7 @@
 	import TermsGate from '#lib/components/TermsGate.svelte';
 	import { getToasts } from '#lib/session.svelte.ts';
 	import { setLive } from '#lib/live.svelte.ts';
-	import { featLine } from '#lib/progress.ts';
+	import { notifText } from '#lib/notify.ts';
 	import type { MeDto } from '#lib/types.ts';
 	import { onMount } from 'svelte';
 
@@ -39,15 +39,14 @@
 			if (n.trade && page.url.pathname === `/trade/${n.trade}`) return;
 			session.notifications++;
 			if (n.kind === 'friend_request') session.friendRequests++;
-			if (n.kind === 'achievement') {
-				toasts.show(featLine(i18n, catalog, n.detail ?? ''));
-				// The reward is in the balance now
+			toasts.show(notifText(i18n, catalog, n));
+			// Achievements and sales pay: the balance changed
+			if (n.kind === 'achievement' || n.kind === 'market_sold') {
 				api<MeDto>('/me')
 					.then((me) => (session.coins = me.coins))
 					.catch(() => {});
-				return;
 			}
-			toasts.show(i18n.t(`notif.${n.kind}`, { name: n.actor ?? '?' }));
+			if (n.kind === 'market_sold') invalidate('app:market');
 		});
 		return () => {
 			off();
@@ -84,7 +83,11 @@
 		{ href: '/trade', key: 'nav.trade', icon: 'trade' }
 	] as const;
 	const current = (href: string) =>
-		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+		href === '/'
+			? page.url.pathname === '/'
+			: page.url.pathname.startsWith(href) ||
+				// The market lives in the trade section
+				(href === '/trade' && page.url.pathname.startsWith('/market'));
 
 	async function setLang(l: Lang) {
 		setCookie('lang', l);

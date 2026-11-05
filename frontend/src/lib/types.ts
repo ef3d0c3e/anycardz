@@ -220,7 +220,8 @@ export type NotificationKind =
 	| 'trade_sealed'
 	| 'trade_done'
 	| 'trade_cancelled'
-	| 'achievement';
+	| 'achievement'
+	| 'market_sold';
 
 export interface NotificationDto {
 	id: number;
@@ -228,7 +229,7 @@ export interface NotificationDto {
 	actor: string | null;
 	actor_avatar: string | null;
 	trade: number | null;
-	/** The achievement key, for kind "achievement" */
+	/** The achievement key for "achievement"; for "market_sold", JSON: card, foil, price, net */
 	detail: string | null;
 	read: boolean;
 	at: string;
@@ -271,4 +272,47 @@ export interface LeaderboardDto {
 	top: RankDto[];
 	/** The caller's row, null when not ranked */
 	me: RankDto | null;
+}
+
+export interface ListingDto {
+	id: number;
+	card: CardDto;
+	/** The foil pattern, for a foil copy */
+	foil: string | null;
+	price: number;
+	seller: string;
+	seller_avatar: string | null;
+	created_at: string;
+	mine: boolean;
+}
+
+export interface MarketPage {
+	items: ListingDto[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+export interface SaleDto {
+	id: number;
+	card: CardDto;
+	foil: string | null;
+	price: number;
+	fee: number;
+	buyer: string | null;
+	at: string | null;
+}
+
+export interface MarketMine {
+	open: ListingDto[];
+	sold: SaleDto[];
+	max_listings: number;
+	fee_percent: number;
+}
+
+export interface MarketSoldDetail {
+	card: string;
+	foil: boolean;
+	price: number;
+	net: number;
 }
