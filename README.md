@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every push: rustfmt, cli
 On the server, with Docker, this repository and anycardz-data cloned side by side, and DNS for the domain pointing at it:
 
 ```sh
-cp .env.prod.example .env.prod   # DOMAIN, POSTGRES_PASSWORD, DATA_DIR
+cp .env.prod.example .env.prod   # DOMAIN, POSTGRES_PASSWORD, DATA_DIR, OPERATOR, CONTACT
 make prod-up                     # build and start; prod-logs, prod-down
 ```
 
@@ -80,9 +80,18 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 
 | Method | Path                     | Auth | What                                              |
 | ------ | ------------------------ | ---- | ------------------------------------------------- |
-| POST   | `/auth/register`         |      | `{username, email, password}`, sets the session cookie |
+| POST   | `/auth/register`         |      | `{username, email, password, terms}` (the current terms version), sets the session cookie |
 | POST   | `/auth/login`            |      | `{login, password}`, login is a username or email |
 | POST   | `/auth/logout`           |      | Ends the current session                          |
+| GET    | `/legal`                 |      | Current terms version and date, operator and contact |
+| POST   | `/legal/accept`          | yes  | `{version}`: accepts the current terms (asked when `terms_outdated` on `/me`) |
+| POST   | `/account/password`      | yes  | `{current, new}`; signs the other sessions out    |
+| POST   | `/account/email`         | yes  | `{password, email}`                               |
+| GET    | `/account/sessions`      | yes  | Logged-in devices, with the current one marked    |
+| DELETE | `/account/sessions/{id}` | yes  | Signs one device out                              |
+| POST   | `/account/sessions/revoke-others` | yes | Signs every other device out             |
+| GET    | `/account/export`        | yes  | Everything kept about the player, as a JSON download |
+| POST   | `/account/delete`        | yes  | `{password, confirm}` (the username): deletes the account and all its data |
 | GET    | `/me`                    | yes  | Profile, coins, pile, daily streak                |
 | GET    | `/collections`           |      | Collections with their featured card              |
 | GET    | `/collections/{slug}`    |      | A collection with all its cards                   |

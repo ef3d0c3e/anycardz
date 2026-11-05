@@ -35,6 +35,8 @@ services:
       # Prometheus scrapes this listener directly; Caddy never serves it
       ANYCARDZ_METRICS_BIND: 0.0.0.0:9100
       ANYCARDZ_METRICS_TOKEN: ${METRICS_TOKEN:-}
+      ANYCARDZ_OPERATOR: ${OPERATOR:-}
+      ANYCARDZ_CONTACT: ${CONTACT:-}
     ports:
       - "${METRICS_PUBLISH:-127.0.0.1:9100}:9100"
     volumes:
