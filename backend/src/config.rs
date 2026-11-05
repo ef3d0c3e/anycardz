@@ -16,6 +16,9 @@ pub struct Config {
     pub metrics_bind: Option<String>,
     /// Bearer token Prometheus must send, when set
     pub metrics_token: Option<String>,
+    /// Who runs the site and how to reach them, shown in the terms
+    pub operator: Option<String>,
+    pub contact: Option<String>,
 }
 
 impl Config {
@@ -36,6 +39,8 @@ impl Config {
                 .collect::<anyhow::Result<_>>()?,
             metrics_bind: std::env::var("ANYCARDZ_METRICS_BIND").ok().filter(|s| !s.trim().is_empty()),
             metrics_token: std::env::var("ANYCARDZ_METRICS_TOKEN").ok().filter(|s| !s.trim().is_empty()),
+            operator: std::env::var("ANYCARDZ_OPERATOR").ok().filter(|s| !s.trim().is_empty()),
+            contact: std::env::var("ANYCARDZ_CONTACT").ok().filter(|s| !s.trim().is_empty()),
         })
     }
 }

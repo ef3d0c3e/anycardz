@@ -2,8 +2,10 @@ use actix_web::{HttpResponse, get, web};
 
 use crate::auth;
 
+pub mod account;
 pub mod catalog;
 pub mod forge;
+pub mod legal;
 pub mod live;
 pub mod notifications;
 pub mod player;
@@ -31,6 +33,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(auth::register)
             .service(auth::login)
             .service(auth::logout)
+            .service(legal::get_legal)
+            .service(legal::accept)
+            .service(account::change_password)
+            .service(account::change_email)
+            .service(account::list_sessions)
+            .service(account::revoke_other_sessions)
+            .service(account::revoke_session)
+            .service(account::export)
+            .service(account::delete_account)
             .service(live::live)
             .service(live::get_shoutbox)
             .service(live::post_shout)

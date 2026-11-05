@@ -72,6 +72,8 @@ struct MeDto {
     coins: i64,
     pile: Vec<String>,
     streak: StreakDto,
+    /// The player has not accepted the current terms yet
+    terms_outdated: bool,
 }
 
 #[get("/me")]
@@ -79,9 +81,9 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
     let mut conn = state.pool.get().await?;
     let pile = pile(&mut conn, user.id).await?;
     let streak = streak_dto(&mut conn, user.id).await?;
-    let (version, has_avatar): (i32, bool) = users::table
+    let (version, has_avatar, terms): (i32, bool, Option<i32>) = users::table
         .find(user.id)
-        .select((users::avatar_version, users::avatar.is_not_null()))
+        .select((users::avatar_version, users::avatar.is_not_null(), users::terms_version))
         .first(&mut conn)
         .await?;
     let avatar = crate::routes::social::avatar_url(&user.username, version, has_avatar);
@@ -96,6 +98,7 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
         avatar,
         friend_requests,
         notifications: crate::routes::notifications::unread(&mut conn, user.id).await?,
+        terms_outdated: terms != Some(crate::routes::legal::TERMS_VERSION),
         username: user.username,
         email: user.email,
         coins: user.coins,

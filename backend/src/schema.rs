@@ -11,6 +11,8 @@ diesel::table! {
         bio -> Text,
         avatar -> Nullable<Bytea>,
         avatar_version -> Int4,
+        terms_version -> Nullable<Int4>,
+        terms_accepted_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -38,6 +40,8 @@ diesel::table! {
         token_hash -> Bytea,
         created_at -> Timestamptz,
         expires_at -> Timestamptz,
+        user_agent -> Text,
+        last_seen_at -> Timestamptz,
     }
 }
 

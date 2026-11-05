@@ -27,14 +27,19 @@ diesel::define_sql_function!(fn lower(x: diesel::sql_types::Text) -> diesel::sql
 
 /// The logged-in user, extracted from the session cookie. Handlers taking it
 /// answer 401 to anonymous requests.
-#[derive(Debug, Clone, Queryable, Selectable)]
-#[diesel(table_name = users)]
+#[derive(Debug, Clone, Queryable)]
 pub struct CurrentUser {
     pub id: i64,
     pub username: String,
     pub email: String,
     pub coins: i64,
+    /// The session this request came with
+    pub session_id: i64,
 }
+
+/// A session's "last seen" moves at most this often: not a write per request
+const SEEN_EVERY: Duration = Duration::minutes(5);
+const MAX_USER_AGENT: usize = 300;
 
 fn token_hash(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
@@ -52,15 +57,25 @@ impl FromRequest for CurrentUser {
                 return Err(ApiError::Unauthorized);
             };
             let mut conn = state.pool.get().await?;
-            sessions::table
+            let (user, seen): (CurrentUser, chrono::DateTime<Utc>) = sessions::table
                 .inner_join(users::table)
                 .filter(sessions::token_hash.eq(token_hash(&token)))
                 .filter(sessions::expires_at.gt(Utc::now()))
-                .select(CurrentUser::as_select())
+                .select((
+                    (users::id, users::username, users::email, users::coins, sessions::id),
+                    sessions::last_seen_at,
+                ))
                 .first(&mut conn)
                 .await
                 .optional()?
-                .ok_or(ApiError::Unauthorized)
+                .ok_or(ApiError::Unauthorized)?;
+            if Utc::now() - seen > SEEN_EVERY {
+                diesel::update(sessions::table.find(user.session_id))
+                    .set(sessions::last_seen_at.eq(Utc::now()))
+                    .execute(&mut conn)
+                    .await?;
+            }
+            Ok(user)
         })
     }
 }
@@ -70,6 +85,9 @@ pub struct RegisterBody {
     username: String,
     email: String,
     password: String,
+    /// The terms version the player ticked; must be the current one
+    #[serde(default)]
+    terms: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -98,7 +116,7 @@ pub fn validate_password(password: &str) -> ApiResult<()> {
     if (8..=128).contains(&password.chars().count()) { Ok(()) } else { Err(ApiError::Invalid("weak_password")) }
 }
 
-fn hash_password(password: &str) -> ApiResult<String> {
+pub(crate) fn hash_password(password: &str) -> ApiResult<String> {
     let mut raw = [0u8; 16];
     rand::rng().fill_bytes(&mut raw);
     let salt = SaltString::encode_b64(&raw).map_err(|e| ApiError::Internal(anyhow::anyhow!("salt: {e}")))?;
@@ -108,8 +126,28 @@ fn hash_password(password: &str) -> ApiResult<String> {
         .map_err(|e| ApiError::Internal(anyhow::anyhow!("hashing: {e}")))
 }
 
+/// Checks a password against a stored hash, off the async workers
+pub(crate) async fn password_matches(hash: String, password: String) -> ApiResult<bool> {
+    web::block(move || {
+        PasswordHash::new(&hash)
+            .is_ok_and(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())
+    })
+    .await
+    .map_err(|e| ApiError::Internal(e.into()))
+}
+
+fn user_agent(req: &HttpRequest) -> String {
+    let ua = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).unwrap_or_default();
+    ua.chars().take(MAX_USER_AGENT).collect()
+}
+
 /// Opens a session and returns the response carrying its cookie
-async fn start_session(state: &AppState, user_id: i64, status: actix_web::http::StatusCode) -> ApiResult<HttpResponse> {
+async fn start_session(
+    state: &AppState,
+    req: &HttpRequest,
+    user_id: i64,
+    status: actix_web::http::StatusCode,
+) -> ApiResult<HttpResponse> {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let token = hex::encode(bytes);
@@ -119,6 +157,7 @@ async fn start_session(state: &AppState, user_id: i64, status: actix_web::http::
             sessions::user_id.eq(user_id),
             sessions::token_hash.eq(token_hash(&token)),
             sessions::expires_at.eq(Utc::now() + Duration::days(SESSION_DAYS)),
+            sessions::user_agent.eq(user_agent(req)),
         ))
         .execute(&mut conn)
         .await?;
@@ -138,7 +177,7 @@ pub async fn register(
     req: HttpRequest,
     body: web::Json<RegisterBody>,
 ) -> ApiResult<HttpResponse> {
-    let RegisterBody { username, email, password } = body.into_inner();
+    let RegisterBody { username, email, password, terms } = body.into_inner();
     let (username, email) = (username.trim().to_owned(), email.trim().to_owned());
     // Every sign-up comes with coins: a few per address, then one every 10 minutes
     let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
@@ -149,6 +188,9 @@ pub async fn register(
     validate_username(&username)?;
     validate_email(&email)?;
     validate_password(&password)?;
+    if terms != Some(crate::routes::legal::TERMS_VERSION) {
+        return Err(ApiError::Invalid("terms_required"));
+    }
     state.limits.register_ip.hit(&ip);
     // Argon2 is slow on purpose: keep it off the async workers
     let hash = web::block(move || hash_password(&password)).await.map_err(|e| ApiError::Internal(e.into()))??;
@@ -160,6 +202,8 @@ pub async fn register(
             users::email.eq(&email),
             users::password_hash.eq(hash),
             users::coins.eq(STARTING_COINS),
+            users::terms_version.eq(crate::routes::legal::TERMS_VERSION),
+            users::terms_accepted_at.eq(Utc::now()),
         ))
         .returning(users::id)
         .get_result::<i64>(&mut conn)
@@ -176,7 +220,7 @@ pub async fn register(
     drop(conn);
     state.metrics.auth("register", "ok");
     state.metrics.earned("signup", STARTING_COINS);
-    start_session(&state, id, actix_web::http::StatusCode::CREATED).await
+    start_session(&state, &req, id, actix_web::http::StatusCode::CREATED).await
 }
 
 #[post("/auth/login")]
@@ -213,17 +257,11 @@ pub async fn login(
     let Some((id, hash)) = found else {
         return Err(failed());
     };
-    let ok = web::block(move || {
-        PasswordHash::new(&hash)
-            .is_ok_and(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())
-    })
-    .await
-    .map_err(|e| ApiError::Internal(e.into()))?;
-    if !ok {
+    if !password_matches(hash, password).await? {
         return Err(failed());
     }
     state.metrics.auth("login", "ok");
-    start_session(&state, id, actix_web::http::StatusCode::OK).await
+    start_session(&state, &req, id, actix_web::http::StatusCode::OK).await
 }
 
 #[post("/auth/logout")]
