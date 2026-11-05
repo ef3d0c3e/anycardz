@@ -63,6 +63,11 @@ async fn pile(conn: &mut AsyncPgConnection, user_id: i64) -> ApiResult<Vec<Strin
 struct MeDto {
     id: i64,
     username: String,
+    avatar: Option<String>,
+    /// Friend requests waiting for an answer
+    friend_requests: i64,
+    /// Unread notifications
+    notifications: i64,
     email: String,
     coins: i64,
     pile: Vec<String>,
@@ -74,8 +79,23 @@ pub async fn get_me(state: web::Data<AppState>, user: CurrentUser) -> ApiResult<
     let mut conn = state.pool.get().await?;
     let pile = pile(&mut conn, user.id).await?;
     let streak = streak_dto(&mut conn, user.id).await?;
+    let (version, has_avatar): (i32, bool) = users::table
+        .find(user.id)
+        .select((users::avatar_version, users::avatar.is_not_null()))
+        .first(&mut conn)
+        .await?;
+    let avatar = crate::routes::social::avatar_url(&user.username, version, has_avatar);
+    let friend_requests: i64 = crate::schema::friendships::table
+        .filter(crate::schema::friendships::addressee_id.eq(user.id))
+        .filter(crate::schema::friendships::accepted.eq(false))
+        .count()
+        .get_result(&mut conn)
+        .await?;
     Ok(HttpResponse::Ok().json(MeDto {
         id: user.id,
+        avatar,
+        friend_requests,
+        notifications: crate::routes::notifications::unread(&mut conn, user.id).await?,
         username: user.username,
         email: user.email,
         coins: user.coins,
@@ -222,6 +242,16 @@ pub async fn open_booster(
         })
         .await?;
     let (collection, cards, pile) = result;
+    for c in &cards {
+        state.live.pull(crate::live::PullEvent {
+            user: user.username.clone(),
+            card: c.card.clone(),
+            rarity: c.rarity,
+            foil: c.foil.map(Into::into),
+            source: crate::live::PullSource::Pack,
+            at: chrono::Utc::now(),
+        });
+    }
     Ok(HttpResponse::Ok().json(serde_json::json!({ "collection": collection, "cards": cards, "pile": pile })))
 }
 
@@ -275,6 +305,8 @@ struct OwnedDto {
     card: String,
     count: i64,
     foils: i64,
+    /// Pattern of each foil copy, newest first
+    patterns: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -313,7 +345,16 @@ pub async fn get_binder(
         }
     }
     let collections = collections.into_iter().map(|(k, v)| (k.to_owned(), v)).collect::<HashMap<String, usize>>();
-    let cards: Vec<OwnedDto> = rows.into_iter().map(|(card, count, foils)| OwnedDto { card, count, foils }).collect();
+    let mut patterns = inventory::foil_patterns(&mut conn, user.id).await?;
+    let cards: Vec<OwnedDto> = rows
+        .into_iter()
+        .map(|(card, count, foils)| OwnedDto {
+            patterns: patterns.remove(&card).unwrap_or_default(),
+            card,
+            count,
+            foils,
+        })
+        .collect();
     let details: Option<HashMap<&str, crate::routes::catalog::CardDto>> = (q.details == Some(1)).then(|| {
         cards
             .iter()

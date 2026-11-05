@@ -4,9 +4,13 @@ use crate::auth;
 
 pub mod catalog;
 pub mod forge;
+pub mod live;
+pub mod notifications;
 pub mod player;
 pub mod players;
+pub mod search;
 pub mod shop;
+pub mod social;
 pub mod trades;
 
 #[get("/health")]
@@ -22,10 +26,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 tracing::debug!("bad json: {err}");
                 crate::error::ApiError::Invalid("invalid_body").into()
             }))
+            .app_data(web::PayloadConfig::new(social::MAX_AVATAR_BYTES))
             .service(health)
             .service(auth::register)
             .service(auth::login)
             .service(auth::logout)
+            .service(live::live)
+            .service(live::get_shoutbox)
+            .service(live::post_shout)
+            .service(live::cards_batch)
             .service(catalog::list_collections)
             .service(catalog::get_collection)
             .service(catalog::card_art)
@@ -43,6 +52,20 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(forge::roulette)
             .service(players::search_players)
             .service(players::player_cards)
+            .service(social::get_profile)
+            .service(social::edit_profile)
+            .service(social::put_avatar)
+            .service(social::delete_avatar)
+            .service(social::get_avatar)
+            .service(social::list_friends)
+            .service(social::add_friend)
+            .service(social::remove_friend)
+            .service(social::list_blocks)
+            .service(social::block)
+            .service(social::unblock)
+            .service(notifications::list)
+            .service(notifications::mark_read)
+            .service(search::search)
             .service(trades::open_trade)
             .service(trades::list_trades)
             .service(trades::get_trade)

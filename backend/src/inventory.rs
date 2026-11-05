@@ -78,3 +78,19 @@ pub async fn count(conn: &mut AsyncPgConnection, user_id: i64, card: &str) -> Ap
         .get_result(conn)
         .await?)
 }
+
+/// Foil patterns of a player's foil copies, per card, newest copy first
+pub async fn foil_patterns(conn: &mut AsyncPgConnection, user_id: i64) -> ApiResult<HashMap<String, Vec<String>>> {
+    let rows: Vec<(String, Option<String>)> = owned_cards::table
+        .filter(owned_cards::user_id.eq(user_id))
+        .filter(owned_cards::foil.is_not_null())
+        .order(owned_cards::id.desc())
+        .select((owned_cards::card, owned_cards::foil))
+        .load(conn)
+        .await?;
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for (card, foil) in rows {
+        out.entry(card).or_default().extend(foil);
+    }
+    Ok(out)
+}

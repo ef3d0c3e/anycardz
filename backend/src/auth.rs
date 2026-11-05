@@ -133,12 +133,22 @@ async fn start_session(state: &AppState, user_id: i64, status: actix_web::http::
 }
 
 #[post("/auth/register")]
-pub async fn register(state: web::Data<AppState>, body: web::Json<RegisterBody>) -> ApiResult<HttpResponse> {
+pub async fn register(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<RegisterBody>,
+) -> ApiResult<HttpResponse> {
     let RegisterBody { username, email, password } = body.into_inner();
     let (username, email) = (username.trim().to_owned(), email.trim().to_owned());
+    // Every sign-up comes with coins: a few per address, then one every 10 minutes
+    let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
+    if let Some(wait) = state.limits.register_ip.wait(&ip) {
+        return Err(ApiError::RetryAfter(wait));
+    }
     validate_username(&username)?;
     validate_email(&email)?;
     validate_password(&password)?;
+    state.limits.register_ip.hit(&ip);
     // Argon2 is slow on purpose: keep it off the async workers
     let hash = web::block(move || hash_password(&password)).await.map_err(|e| ApiError::Internal(e.into()))??;
 
@@ -167,9 +177,26 @@ pub async fn register(state: web::Data<AppState>, body: web::Json<RegisterBody>)
 }
 
 #[post("/auth/login")]
-pub async fn login(state: web::Data<AppState>, body: web::Json<LoginBody>) -> ApiResult<HttpResponse> {
+pub async fn login(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<LoginBody>,
+) -> ApiResult<HttpResponse> {
     let LoginBody { login, password } = body.into_inner();
     let login = login.trim().to_lowercase();
+    // Only failures cost: per account against guessing one password, per
+    // address against sweeping many accounts
+    let ip = crate::ratelimit::client_ip(&req, &state.config.trusted_proxies);
+    let limits = &state.limits;
+    let wait = [limits.login_account.wait(&login), limits.login_ip.wait(&ip)].into_iter().flatten().max();
+    if let Some(wait) = wait {
+        return Err(ApiError::RetryAfter(wait));
+    }
+    let failed = || {
+        limits.login_account.hit(&login);
+        limits.login_ip.hit(&ip);
+        ApiError::Invalid("invalid_credentials")
+    };
     let mut conn = state.pool.get().await?;
     let found: Option<(i64, String)> = users::table
         .filter(lower(users::username).eq(&login).or(lower(users::email).eq(&login)))
@@ -179,7 +206,7 @@ pub async fn login(state: web::Data<AppState>, body: web::Json<LoginBody>) -> Ap
         .optional()?;
     drop(conn);
     let Some((id, hash)) = found else {
-        return Err(ApiError::Invalid("invalid_credentials"));
+        return Err(failed());
     };
     let ok = web::block(move || {
         PasswordHash::new(&hash)
@@ -188,7 +215,7 @@ pub async fn login(state: web::Data<AppState>, body: web::Json<LoginBody>) -> Ap
     .await
     .map_err(|e| ApiError::Internal(e.into()))?;
     if !ok {
-        return Err(ApiError::Invalid("invalid_credentials"));
+        return Err(failed());
     }
     start_session(&state, id, actix_web::http::StatusCode::OK).await
 }

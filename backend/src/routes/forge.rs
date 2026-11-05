@@ -81,6 +81,14 @@ pub async fn tradeup(
             Ok((had == 0, had + 1))
         })
         .await?;
+    state.live.pull(crate::live::PullEvent {
+        user: user.username.clone(),
+        card: won.clone(),
+        rarity: target,
+        foil: None,
+        source: crate::live::PullSource::Tradeup,
+        at: chrono::Utc::now(),
+    });
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "card": won, "rarity": target, "collection": rng_collection, "is_new": is_new, "copies": copies, "odds": odds,
     })))
@@ -144,6 +152,16 @@ pub async fn roulette(
         Ok(())
     })
     .await?;
+    if let Some(pattern) = won {
+        state.live.pull(crate::live::PullEvent {
+            user: user.username.clone(),
+            card: target.clone(),
+            rarity: target_rarity,
+            foil: Some(pattern.into()),
+            source: crate::live::PullSource::Roulette,
+            at: chrono::Utc::now(),
+        });
+    }
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "won": won.is_some(), "foil": won, "chance": chance, "burned": burned.len(),
     })))

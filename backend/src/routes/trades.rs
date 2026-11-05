@@ -21,6 +21,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::i18n::Lang;
 use crate::inventory::{self, Copies};
 use crate::routes::catalog::CardDto;
+use crate::routes::notifications::{Kind, notify};
 use crate::schema::{owned_cards, trade_lines, trades, users};
 
 /// Cards one side may put on the table
@@ -86,7 +87,9 @@ struct TradeDto<'a> {
 /// The trade, when the caller takes part in it
 async fn find(conn: &mut AsyncPgConnection, id: i64, uid: i64, lock: bool) -> ApiResult<Trade> {
     let q = trades::table.find(id).filter(trades::from_id.eq(uid).or(trades::to_id.eq(uid))).select(Trade::as_select());
-    let t = if lock { q.for_update().first(conn).await } else { q.first(conn).await };
+    // NO KEY UPDATE: the trade's key never changes, and foreign keys pointing at it
+    // (notifications) only take KEY SHARE locks, which this does not block
+    let t = if lock { q.for_no_key_update().first(conn).await } else { q.first(conn).await };
     t.optional()?.ok_or(ApiError::NotFound("unknown_trade"))
 }
 
@@ -167,6 +170,9 @@ pub async fn open_trade(
     if partner == user.id {
         return Err(ApiError::Invalid("trade_self"));
     }
+    if super::social::blocked_between(&mut conn, user.id, partner).await? {
+        return Err(ApiError::Conflict("player_unavailable"));
+    }
     let existing: Option<i64> = trades::table
         .filter(trades::state.eq("open"))
         .filter(
@@ -201,6 +207,10 @@ pub async fn open_trade(
         }
     };
     let t = find(&mut conn, id, user.id, false).await?;
+    state.live.trade(t.id, [t.from_id, t.to_id]);
+    if existing.is_none() {
+        notify(&state, &mut conn, t.partner(user.id), Kind::TradeOpened, user.id, Some(t.id)).await?;
+    }
     let status = if existing.is_some() { 200 } else { 201 };
     let body = dto(&mut conn, &state.catalog, lang, t, user.id).await?;
     Ok(HttpResponse::build(actix_web::http::StatusCode::from_u16(status).unwrap()).json(body))
@@ -391,6 +401,8 @@ pub async fn edit_trade(
     })
     .await?;
     let t = find(&mut conn, id, uid, false).await?;
+    state.live.trade(t.id, [t.from_id, t.to_id]);
+    notify(&state, &mut conn, t.partner(uid), Kind::TradeChanged, uid, Some(t.id)).await?;
     Ok(HttpResponse::Ok().json(dto(&mut conn, &state.catalog, lang, t, uid).await?))
 }
 
@@ -445,6 +457,9 @@ pub async fn seal_trade(
     })
     .await?;
     let t = find(&mut conn, id, uid, false).await?;
+    state.live.trade(t.id, [t.from_id, t.to_id]);
+    let kind = if t.state == "done" { Kind::TradeDone } else { Kind::TradeSealed };
+    notify(&state, &mut conn, t.partner(uid), kind, uid, Some(t.id)).await?;
     Ok(HttpResponse::Ok().json(dto(&mut conn, &state.catalog, lang, t, uid).await?))
 }
 
@@ -455,7 +470,9 @@ async fn swap(conn: &mut AsyncPgConnection, catalog: &Catalog, t: &Trade, ls: &[
         .filter(users::id.eq_any([t.from_id, t.to_id]))
         .order(users::id.asc())
         .select(users::id)
-        .for_update()
+        // Coins change, keys do not: KEY SHARE locks from foreign key checks
+        // (a notification being written) go through instead of deadlocking
+        .for_no_key_update()
         .load(conn)
         .await?;
     let unavailable = |e: ApiError| match e {
@@ -518,5 +535,7 @@ pub async fn cancel_trade(
     })
     .await?;
     let t = find(&mut conn, id, uid, false).await?;
+    state.live.trade(t.id, [t.from_id, t.to_id]);
+    notify(&state, &mut conn, t.partner(uid), Kind::TradeCancelled, uid, Some(t.id)).await?;
     Ok(HttpResponse::Ok().json(dto(&mut conn, &state.catalog, lang, t, uid).await?))
 }

@@ -6,6 +6,8 @@ pub mod error;
 pub mod game;
 pub mod i18n;
 pub mod inventory;
+pub mod live;
+pub mod ratelimit;
 pub mod routes;
 pub mod schema;
 
@@ -19,6 +21,8 @@ pub use data::Catalog;
 
 pub struct AppState {
     pub pool: db::DbPool,
+    pub live: live::Hub,
+    pub limits: ratelimit::AuthLimits,
     pub catalog: Arc<Catalog>,
     pub config: Arc<Config>,
 }

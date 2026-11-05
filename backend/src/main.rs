@@ -16,7 +16,19 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::pool(&config.database_url)?;
 
     let bind = config.bind.clone();
-    let state = web::Data::new(AppState { pool, catalog: Arc::new(catalog), config: Arc::new(config) });
+    let limits = if std::env::var("ANYCARDZ_RELAXED_LIMITS").is_ok_and(|v| v == "1") {
+        tracing::warn!("auth rate limits relaxed (ANYCARDZ_RELAXED_LIMITS=1): development only");
+        anycardz_api::ratelimit::AuthLimits::relaxed()
+    } else {
+        Default::default()
+    };
+    let state = web::Data::new(AppState {
+        pool,
+        live: Default::default(),
+        limits,
+        catalog: Arc::new(catalog),
+        config: Arc::new(config),
+    });
     tracing::info!("listening on http://{bind}");
     HttpServer::new(move || {
         App::new()

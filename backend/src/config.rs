@@ -10,6 +10,8 @@ pub struct Config {
     pub bind: String,
     pub dev_collections: bool,
     pub secure_cookies: bool,
+    /// Proxies whose X-Forwarded-For is believed
+    pub trusted_proxies: Vec<std::net::IpAddr>,
 }
 
 impl Config {
@@ -22,6 +24,12 @@ impl Config {
             bind: std::env::var("ANYCARDZ_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into()),
             dev_collections: flag("ANYCARDZ_DEV_COLLECTIONS"),
             secure_cookies: flag("ANYCARDZ_SECURE_COOKIES"),
+            trusted_proxies: std::env::var("ANYCARDZ_TRUSTED_PROXIES")
+                .unwrap_or_default()
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().parse().context("ANYCARDZ_TRUSTED_PROXIES holds an address that is not an IP"))
+                .collect::<anyhow::Result<_>>()?,
         })
     }
 }

@@ -81,9 +81,13 @@ pub async fn player_cards(
         .filter_map(|(slug, _, _)| state.catalog.card(slug))
         .map(|c| (c.slug.as_str(), CardDto::new(&state.catalog, c, lang)))
         .collect();
+    let mut patterns = crate::inventory::foil_patterns(&mut conn, id).await?;
     let cards: Vec<_> = rows
         .iter()
-        .map(|(card, count, foils)| serde_json::json!({ "card": card, "count": count, "foils": foils }))
+        .map(|(card, count, foils)| {
+            let p = patterns.remove(card).unwrap_or_default();
+            serde_json::json!({ "card": card, "count": count, "foils": foils, "patterns": p })
+        })
         .collect();
     Ok(HttpResponse::Ok().json(serde_json::json!({ "cards": cards, "details": details })))
 }

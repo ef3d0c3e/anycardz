@@ -8,6 +8,26 @@ diesel::table! {
         password_hash -> Text,
         coins -> Int8,
         created_at -> Timestamptz,
+        bio -> Text,
+        avatar -> Nullable<Bytea>,
+        avatar_version -> Int4,
+    }
+}
+
+diesel::table! {
+    friendships (requester_id, addressee_id) {
+        requester_id -> Int8,
+        addressee_id -> Int8,
+        accepted -> Bool,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    blocks (user_id, blocked_id) {
+        user_id -> Int8,
+        blocked_id -> Int8,
+        created_at -> Timestamptz,
     }
 }
 
@@ -88,6 +108,30 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    shout_messages (id) {
+        id -> Int8,
+        user_id -> Int8,
+        body -> Text,
+        card -> Nullable<Text>,
+        foil -> Nullable<Text>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    notifications (id) {
+        id -> Int8,
+        user_id -> Int8,
+        kind -> Text,
+        actor_id -> Nullable<Int8>,
+        trade_id -> Nullable<Int8>,
+        read_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::joinable!(shout_messages -> users (user_id));
 diesel::joinable!(trade_lines -> trades (trade_id));
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(topups -> users (user_id));
@@ -103,5 +147,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     streaks,
     topups,
     trades,
-    trade_lines
+    trade_lines,
+    shout_messages,
+    friendships,
+    blocks,
+    notifications,
 );
