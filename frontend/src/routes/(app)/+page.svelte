@@ -1,0 +1,515 @@
+<script lang="ts">
+	import { onDestroy } from 'svelte';
+	import type { PageProps } from './$types';
+	import { getI18n } from '#lib/i18n/index.svelte.ts';
+	import { getCatalog, getSession, getToasts } from '#lib/session.svelte.ts';
+	import { post } from '#lib/api.ts';
+	import { arp, flyCoins, flyTo, tone } from '#lib/fx.ts';
+	import type { StreakDto } from '#lib/types.ts';
+	import Pack from '#lib/components/Pack.svelte';
+	import HoldButton from '#lib/components/HoldButton.svelte';
+	import ScratchTicket from '#lib/components/ScratchTicket.svelte';
+	import { getTopup } from '#lib/topup.svelte.ts';
+	import { ApiError } from '#lib/api.ts';
+
+	let { data }: PageProps = $props();
+	const i18n = getI18n();
+	const session = getSession();
+	const catalog = getCatalog()!;
+	const toasts = getToasts();
+	const topup = getTopup();
+
+	const pileNames = $derived(
+		[...new Set(session.pile)].map((s) => catalog.get(s)?.title ?? s).join(' · ')
+	);
+
+	// ---- daily streak ----
+	let ticket = $state<HTMLElement>();
+	let claiming = false;
+	async function claim() {
+		if (claiming || session.streak.claimed_today) return;
+		claiming = true;
+		try {
+			const res = await post<{ reward: number; coins: number; streak: StreakDto }>('/streak/claim');
+			arp([660, 880, 1100, 1320]);
+			if (ticket) await flyCoins(ticket);
+			session.coins = res.coins;
+			session.streak = res.streak;
+			toasts.show(i18n.t('streak.claimed_toast', { n: res.reward, day: res.streak.day }));
+		} catch (e) {
+			toasts.show(i18n.error(e), 'warn');
+		} finally {
+			claiming = false;
+		}
+	}
+	let countdown = $state('');
+	const tick = () => {
+		const now = new Date();
+		// The API counts days in UTC
+		const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+		const s = Math.max(0, Math.floor((next - now.getTime()) / 1000));
+		countdown = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60]
+			.map((v) => String(v).padStart(2, '0'))
+			.join(':');
+	};
+	tick();
+	const timer = setInterval(tick, 1000);
+	onDestroy(() => clearInterval(timer));
+
+	// ---- shop ----
+	const packs = $state<Record<string, HTMLElement>>({});
+	/** Not enough coins: the top-up sheet, which finishes the purchase afterwards */
+	function askTopup(slug: string) {
+		const c = catalog.get(slug);
+		if (!c) return;
+		topup.ask({
+			need: c.price - session.coins,
+			reason: i18n.t('topup.reason_booster', { name: c.title }),
+			then: () => buy(slug)
+		});
+	}
+	async function buy(slug: string) {
+		const c = catalog.get(slug);
+		if (c && session.coins < c.price) return askTopup(slug);
+		try {
+			const res = await post<{ coins: number; pile: string[] }>('/shop/boosters', {
+				collection: slug
+			});
+			session.coins = res.coins;
+			tone(520, 0.08, 'triangle', 0.05);
+			const target = document.querySelector('[data-nav="open"]');
+			if (target && packs[slug]) await flyTo(packs[slug], target);
+			session.pile = res.pile;
+			tone(780, 0.1, 'triangle', 0.05);
+			toasts.show(i18n.t('lobby.added', { name: catalog.get(slug)?.title ?? slug }));
+		} catch (e) {
+			if (e instanceof ApiError && e.code === 'not_enough_coins') askTopup(slug);
+			else toasts.show(i18n.error(e), 'warn');
+		}
+	}
+</script>
+
+<svelte:head><title>{i18n.t('nav.lobby')} · AnyCardz</title></svelte:head>
+
+<div class="screen">
+	<div class="lobby-grid">
+		<section class="panel pile-hero" aria-labelledby="pile-title">
+			{#if session.pile.length}
+				<a class="pile-stack" href="/open" aria-label={i18n.t('lobby.open_next')}>
+					{#each session.pile.slice(0, 4).toReversed() as slug, i}
+						{@const c = catalog.get(slug)}
+						{#if c}<Pack
+								collection={c}
+								style="--k:{Math.min(session.pile.length, 4) - 1 - i}"
+							/>{/if}
+					{/each}
+				</a>
+			{:else}
+				<div class="pile-empty">{i18n.t('lobby.empty_pile')}</div>
+			{/if}
+			<div class="pile-text">
+				<p class="eyebrow">{i18n.t('lobby.unopened')}</p>
+				<h2 id="pile-title">
+					{session.pile.length
+						? i18n.t('lobby.packs_waiting', { n: session.pile.length })
+						: i18n.t('lobby.no_packs')}
+				</h2>
+				<p>{session.pile.length ? pileNames : i18n.t('lobby.no_packs_hint')}</p>
+				{#if session.pile.length}<a class="btn" href="/open">{i18n.t('lobby.open_next')}</a>{/if}
+			</div>
+		</section>
+
+		<section class="panel streak" aria-labelledby="streak-title">
+			<div class="streak-head">
+				<div>
+					<p class="eyebrow">{i18n.t('streak.title')}</p>
+					<h2 id="streak-title">
+						{i18n.t('streak.day', { n: session.streak.day })}
+						<span class="flame" aria-hidden="true"></span>
+					</h2>
+				</div>
+				<p class="best">{i18n.t('streak.best', { n: session.streak.best })}</p>
+			</div>
+			<div bind:this={ticket}>
+				{#if session.streak.claimed_today}
+					<div class="claimed">
+						<span class="t-label">{i18n.t('streak.today')}</span>
+						<span class="t-val">+{i18n.num(session.streak.reward)}</span>
+						<span class="t-stamp">{i18n.t('streak.claimed')}</span>
+					</div>
+				{:else}
+					<ScratchTicket label={i18n.t('streak.scratch')} onScratched={claim}>
+						<span class="t-label">{i18n.t('streak.today')}</span>
+						<span class="t-val">+{i18n.num(session.streak.reward)}</span>
+						<span class="t-sub">{i18n.t('common.coins')}</span>
+					</ScratchTicket>
+				{/if}
+			</div>
+			{#if session.streak.claimed_today}
+				<p class="next">
+					{i18n.t('streak.next', { time: countdown, n: session.streak.next_reward })}
+				</p>
+			{:else}
+				<p class="next">
+					{i18n.t('streak.scratch_hint')}
+					<button type="button" class="linkish" onclick={claim}>{i18n.t('streak.reveal')}</button>
+				</p>
+			{/if}
+			<ol class="ladder" aria-label={i18n.t('streak.ladder')}>
+				{#each session.streak.rewards as v, i}
+					{@const d = i + 1}
+					{@const now = Math.min(session.streak.day, 5)}
+					<li class:past={d < now} class:now={d === now}>
+						<span>{i18n.t('streak.day', { n: d })}{d === 5 ? '+' : ''}</span><b>{i18n.num(v)}</b>
+					</li>
+				{/each}
+			</ol>
+		</section>
+	</div>
+
+	<div class="sec-head">
+		<h2>{i18n.t('lobby.boosters')}</h2>
+		<p>{i18n.t('lobby.odds')}</p>
+	</div>
+	<div class="shelf">
+		{#each catalog.collections as c (c.slug)}
+			{@const owned = data.binder.collections[c.slug] ?? 0}
+			{@const short = session.coins < c.price}
+			<article class="shelf-item">
+				<div class="pack-wrap" bind:this={packs[c.slug]}><Pack collection={c} /></div>
+				<h3 title={c.title}>{c.title}</h3>
+				<div class="own">
+					<span class="bar"><i style:width="{Math.round((owned / c.total) * 100)}%"></i></span
+					>{owned}/{c.total}
+				</div>
+				<HoldButton
+					class="btn buy {short ? 'short' : ''}"
+					ms={short ? 350 : 650}
+					onDone={() => buy(c.slug)}
+					onProgress={(p) =>
+						Math.round(p * 100) % 20 === 0 && tone(300 + p * 500, 0.03, 'sine', 0.03)}
+					onTooShort={() => (short ? askTopup(c.slug) : toasts.show(i18n.t('lobby.keep_holding')))}
+				>
+					<span>{short ? i18n.t('lobby.topup_to_buy') : i18n.t('lobby.hold_to_buy')}</span>
+					<span class="price"><span class="coin">c</span>{c.price}</span>
+				</HoldButton>
+			</article>
+		{/each}
+	</div>
+</div>
+
+<style>
+	.screen {
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+		padding: 16px max(16px, env(safe-area-inset-right, 0px)) 24px
+			max(16px, env(safe-area-inset-left, 0px));
+		max-width: 1200px;
+		margin: 0 auto;
+	}
+	@media (max-width: 699px) {
+		.screen {
+			padding-bottom: 52px;
+		}
+	}
+	@media (min-width: 700px) {
+		.screen {
+			padding: 24px;
+		}
+	}
+	.lobby-grid {
+		display: grid;
+		gap: 16px;
+		grid-template-columns: minmax(0, 1fr);
+	}
+	@media (min-width: 980px) {
+		.lobby-grid {
+			grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+		}
+	}
+	.panel {
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: 20px;
+		padding: 18px;
+		min-width: 0;
+	}
+	.pile-hero {
+		display: flex;
+		gap: 22px;
+		align-items: center;
+		background: radial-gradient(ellipse at 20% 50%, var(--felt-hi), var(--felt) 75%);
+		color: var(--felt-ink);
+		border: 0;
+		overflow: hidden;
+	}
+	.pile-hero .eyebrow {
+		color: rgba(238, 240, 255, 0.6);
+	}
+	.pile-stack {
+		position: relative;
+		width: min(132px, 34vw);
+		aspect-ratio: 5/8;
+		flex: none;
+		display: block;
+		margin: 8px 6px 8px 4px;
+	}
+	.pile-stack :global(.pack) {
+		position: absolute;
+		inset: 0;
+		transform: rotate(calc((var(--k) * 6deg) - 2deg))
+			translate(calc(var(--k) * 7px), calc(var(--k) * 3px));
+		transition: transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+	}
+	.pile-stack:hover :global(.pack),
+	.pile-stack:focus-visible :global(.pack) {
+		transform: rotate(calc((var(--k) * 11deg) - 6deg))
+			translate(calc(var(--k) * 16px), calc(var(--k) * -4px));
+	}
+	.pile-empty {
+		display: grid;
+		place-items: center;
+		width: min(132px, 34vw);
+		aspect-ratio: 5/8;
+		border: 2px dashed rgba(238, 240, 255, 0.3);
+		border-radius: 12px;
+		color: rgba(238, 240, 255, 0.6);
+		font-size: 12px;
+		text-align: center;
+		padding: 8px;
+		flex: none;
+	}
+	.pile-text {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		align-items: flex-start;
+		min-width: 0;
+	}
+	.pile-text h2 {
+		font-size: 30px;
+	}
+	.pile-text p {
+		color: rgba(238, 240, 255, 0.75);
+	}
+	.pile-text .btn {
+		margin-top: 6px;
+		background: var(--felt-ink);
+		color: var(--felt);
+		border-color: transparent;
+	}
+	.streak {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.streak-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 10px;
+	}
+	.streak-head h2 {
+		font-size: 26px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.flame {
+		width: 18px;
+		height: 24px;
+		background: radial-gradient(ellipse at 50% 80%, #ffd25a, #ff7a1a 55%, #e8381b);
+		border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%;
+		display: inline-block;
+		animation: flick 1.2s ease-in-out infinite alternate;
+		transform-origin: 50% 100%;
+	}
+	@keyframes flick {
+		to {
+			transform: scale(1.08, 0.92) rotate(3deg);
+		}
+	}
+	.best,
+	.next {
+		color: var(--muted);
+		font-size: 13px;
+	}
+	.t-label {
+		font: 600 11px var(--mono);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.t-val {
+		font: 800 42px/1 var(--display);
+		color: var(--legend);
+		letter-spacing: -0.03em;
+	}
+	.t-sub {
+		font-weight: 600;
+		color: var(--muted);
+	}
+	.claimed {
+		position: relative;
+		height: 96px;
+		border-radius: 14px;
+		background: var(--surface-2);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+	}
+	.t-stamp {
+		position: absolute;
+		right: 16px;
+		top: 50%;
+		translate: 0 -50%;
+		rotate: -12deg;
+		font: 800 15px/1 var(--display);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--ok);
+		border: 3px solid var(--ok);
+		padding: 7px 10px;
+		border-radius: 8px;
+		animation: stamp 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
+	}
+	.ladder {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 6px;
+	}
+	.ladder li {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		padding: 7px 2px;
+		border-radius: 10px;
+		background: var(--surface-2);
+		font-size: 11px;
+		color: var(--muted);
+		position: relative;
+		text-align: center;
+	}
+	.ladder li b {
+		font: 700 13px var(--mono);
+		color: var(--ink);
+	}
+	.ladder li.past {
+		opacity: 0.55;
+	}
+	.ladder li.now {
+		background: color-mix(in srgb, var(--legend) 18%, var(--surface));
+		color: var(--ink);
+		box-shadow: inset 0 0 0 1.5px var(--legend);
+	}
+	.sec-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.sec-head h2 {
+		font-size: 22px;
+	}
+	.sec-head p {
+		color: var(--muted);
+		font-size: 13px;
+	}
+	.shelf {
+		display: flex;
+		gap: 14px;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		padding: 4px 2px 12px;
+	}
+	@media (min-width: 700px) {
+		.shelf {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+			overflow: visible;
+		}
+	}
+	.shelf-item {
+		flex: none;
+		width: 168px;
+		scroll-snap-align: start;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 0;
+	}
+	@media (min-width: 700px) {
+		.shelf-item {
+			width: auto;
+		}
+	}
+	.pack-wrap {
+		width: 78%;
+		margin: 0 auto 4px;
+		transition: transform 0.3s cubic-bezier(0.2, 1.4, 0.4, 1);
+	}
+	.shelf-item:hover .pack-wrap {
+		transform: translateY(-6px) rotate(-2deg);
+	}
+	/* Two lines whatever the name: rows of buttons stay aligned */
+	.shelf-item h3 {
+		font-size: 15px;
+		line-height: 1.15;
+		min-height: 2.3em;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.own {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font: 600 11.5px var(--mono);
+		color: var(--muted);
+	}
+	.bar {
+		flex: 1;
+		height: 5px;
+		border-radius: 3px;
+		background: var(--surface-2);
+		overflow: hidden;
+		box-shadow: inset 0 0 0 1px var(--line);
+	}
+	.bar i {
+		display: block;
+		height: 100%;
+		background: var(--ok);
+		border-radius: 3px;
+	}
+	.shelf-item :global(.buy) {
+		margin-top: auto;
+		width: 100%;
+		padding: 9px 10px;
+		font-size: 13px;
+		justify-content: space-between;
+	}
+	.price {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-family: var(--mono);
+	}
+	.shelf-item :global(.buy.short) {
+		--fill: var(--legend);
+		border-style: dashed;
+	}
+	.price .coin {
+		width: 15px;
+		height: 15px;
+		font-size: 8px;
+	}
+</style>
