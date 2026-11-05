@@ -54,3 +54,31 @@ test('a pack lands five cards in the tray', async ({ page }) => {
 	await expect(page.locator('.tray .slotmini.pop')).toHaveCount(5);
 	await expect(page.locator('.after')).toBeVisible();
 });
+
+// Achievements would tell what the pack holds: they wait for the reveal
+test('achievements wait until the pack is revealed', async ({ page }) => {
+	await newPlayer(page, 1);
+	await reelMode(page, 'one');
+	// When the first achievement toast shows up, and when the pack summary does
+	await page.addInitScript(() => {
+		const w = window as unknown as { seen: Record<string, number> };
+		w.seen = {};
+		new MutationObserver(() => {
+			if (!w.seen.toast && document.querySelector('.toasts')?.textContent?.includes('First tear'))
+				w.seen.toast = performance.now();
+			if (!w.seen.after && document.querySelector('.after')) w.seen.after = performance.now();
+		}).observe(document, { subtree: true, childList: true, characterData: true });
+	});
+	await visit(page, '/open');
+	await tearPack(page);
+	// The pity counter is up to date from the start of the spin
+	await expect(page.getByText(/Legendary guaranteed/)).toBeVisible();
+	await page.waitForTimeout(1500);
+	await page.getByRole('button', { name: /skip/i }).click();
+	await page.locator('.after').waitFor();
+	await expect(page.getByText(/Achievement: First tear/).first()).toBeVisible({ timeout: 5000 });
+	const seen = await page.evaluate(
+		() => (window as unknown as { seen: Record<string, number> }).seen
+	);
+	expect(seen.toast).toBeGreaterThanOrEqual(seen.after);
+});

@@ -38,6 +38,9 @@ export class Live {
 	#missing = new Set<string>();
 	#tradeListeners = new Set<(id: number) => void>();
 	#noteListeners = new Set<(n: NotificationDto) => void>();
+	/** While a pack opens: the player's own news waits, it would spoil the reveal */
+	#holdFor: string | null = null;
+	#held: LiveMessage[] = [];
 
 	start() {
 		this.#closed = false;
@@ -78,7 +81,34 @@ export class Live {
 		};
 	}
 
+	/**
+	 * Holds what would spoil the pack being opened: the player's own pulls,
+	 * sets and achievements, and their notifications (achievement toasts,
+	 * missions). Everyone else's news still comes through.
+	 */
+	hold(username: string) {
+		this.#holdFor = username;
+	}
+
+	/** Lets the held news through, in the order it came */
+	release() {
+		this.#holdFor = null;
+		const held = this.#held;
+		this.#held = [];
+		for (const m of held) this.#receive(m);
+	}
+
+	#spoils(m: LiveMessage) {
+		if (this.#holdFor === null) return false;
+		if (m.type === 'notification') return true;
+		return (m.type === 'pull' || m.type === 'feat') && m.user === this.#holdFor;
+	}
+
 	#receive(m: LiveMessage) {
+		if (this.#spoils(m)) {
+			this.#held.push(m);
+			return;
+		}
 		switch (m.type) {
 			case 'hello':
 				this.pulls = m.pulls.filter((p) => !this.blocked.has(p.user));

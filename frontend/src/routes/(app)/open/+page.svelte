@@ -88,6 +88,8 @@
 			/* no remembered mode */
 		}
 		setup();
+		// Leaving mid-pack: nothing stays held
+		return () => live.release();
 	});
 
 	const pickMode = (): Mode => userMode ?? (felt.clientWidth >= 940 ? 'all' : 'one');
@@ -173,6 +175,8 @@
 		tone(200, 0.25, 'sawtooth', 0.04);
 		tone(120, 0.3, 'square', 0.02, 0.05);
 		const slug = collection.slug;
+		// Achievements and the live feed would tell what the pack holds: they wait for the reveal
+		live.hold(session.username);
 		let opened: OpenedDto;
 		let full: CollectionDto;
 		try {
@@ -184,6 +188,7 @@
 				sleep(700)
 			]).then(([o, c]) => [o, c] as const);
 		} catch (e) {
+			live.release();
 			toasts.show(i18n.error(e), 'warn');
 			setup();
 			return;
@@ -335,6 +340,7 @@
 		if (mode === 'all') await sleep(500);
 		dim = false;
 		phase = 'done';
+		live.release();
 		hint = '';
 		if (mode === 'one') rays = '';
 	}
