@@ -11,7 +11,7 @@ test('free packs: claimed from the lobby, opened like any other', async ({ page 
 	await expect(page.getByText('3 free packs added to your pile')).toBeVisible();
 	await expect(free.getByRole('button', { name: 'Reveal the packs' })).toHaveCount(0);
 	await expect(free.getByText('Claimed')).toBeVisible();
-	await expect(free.getByText(/^Next packs in 1[01]:\d\d:\d\d$/)).toBeVisible();
+	await expect(free.getByText(/^Next packs in 0[01]:\d\d:\d\d$/)).toBeVisible();
 	await expect(page.locator('.pile-text h2')).toHaveText('3 packs waiting');
 	await expect(page.locator('.pile-stack .pack.free')).toHaveCount(3);
 

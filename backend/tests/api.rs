@@ -1328,7 +1328,7 @@ async fn set_user(ctx: &Ctx, cookie_name: &str, sql_set: &str) {
 }
 
 #[actix_web::test]
-async fn free_packs_twice_a_day_from_every_collection() {
+async fn free_packs_every_two_hours_from_every_collection() {
     let Some(ctx) = ctx().await else { return };
     let app = app!(ctx);
     let name = unique("free");
@@ -1350,7 +1350,7 @@ async fn free_packs_twice_a_day_from_every_collection() {
     assert_eq!(me["free_packs"]["ready"], false);
     let next: chrono::DateTime<chrono::Utc> = me["free_packs"]["next_at"].as_str().unwrap().parse().unwrap();
     let wait = next - chrono::Utc::now();
-    assert!(wait > chrono::Duration::hours(11) && wait <= chrono::Duration::hours(12), "{wait}");
+    assert!(wait > chrono::Duration::hours(1) && wait <= chrono::Duration::hours(2), "{wait}");
     let (s, err) = post(&app, "/api/free-packs/claim", &cookie, json!({})).await;
     assert_eq!((s, err["error"].as_str()), (409, Some("free_packs_not_ready")));
 
@@ -1381,8 +1381,8 @@ async fn free_packs_twice_a_day_from_every_collection() {
     }
     assert_eq!(get(&app, "/api/me", &cookie).await.1["pile"], json!([]));
 
-    // Twelve hours later, three more
-    set_user(&ctx, &name, "free_packs_at = now() - interval '12 hours 1 minute'").await;
+    // Two hours later, three more
+    set_user(&ctx, &name, "free_packs_at = now() - interval '2 hours 1 minute'").await;
     assert_eq!(get(&app, "/api/me", &cookie).await.1["free_packs"]["ready"], true);
     assert_eq!(post(&app, "/api/free-packs/claim", &cookie, json!({})).await.0, 200);
     // The spread over collections is checked on the draw itself (game tests):

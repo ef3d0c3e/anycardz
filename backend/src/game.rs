@@ -16,7 +16,7 @@ pub const PACK_SIZE: usize = 5;
 pub const FREE_PACK: &str = "*";
 /// Free packs handed out per claim, and the wait between claims
 pub const FREE_PACKS: i64 = 3;
-pub const FREE_PACK_HOURS: i64 = 12;
+pub const FREE_PACK_HOURS: i64 = 2;
 
 /// A pack opened after this many in a row without a legendary holds one for
 /// sure. A pack has a legendary 23% of the time (1 - 0.95^5): 14 dry packs in

@@ -113,7 +113,7 @@ Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code 
 | POST   | `/shop/topup`            | yes  | `{pack}`, grants the coins at once (demo, logged in `topups`) |
 | POST   | `/pile/open`             | yes  | `{collection?}`, opens a booster: 5 cards         |
 | POST   | `/streak/claim`          | yes  | Daily bonus                                       |
-| POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 12 h; `/me.free_packs` says when |
+| POST   | `/free-packs/claim`      | yes  | 3 free packs (pile entry `*`, drawn from every collection) every 2 h; `/me.free_packs` says when |
 | POST   | `/tickets/scratch`       | yes  | Plays a scratch ticket (3 at most, one back every 20 min; `/me.tickets`): `{slots, prize, coins_won, coins, pile, tickets}`. Three gems 1000 coins (0.5%), coins 250 (4%), packs a free pack (3%), sparkles the foil roulette ×2 for 2 h, capped at 100% (2.5%); any pair 20 coins (30%) |
 | GET    | `/missions`              | yes  | Today's 3 missions (UTC day) with progress and rewards, and whether the all-three bonus pack was given; also in `/me` |
 | GET    | `/achievements`          | yes  | Every achievement with the player's progress and when it was earned |
