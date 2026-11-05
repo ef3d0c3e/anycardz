@@ -32,6 +32,11 @@ services:
       # Only Caddy's X-Forwarded-For is believed (rate limits are per client address)
       ANYCARDZ_TRUSTED_PROXIES: 172.30.0.10
       RUST_LOG: ${RUST_LOG:-info}
+      # Prometheus scrapes this listener directly; Caddy never serves it
+      ANYCARDZ_METRICS_BIND: 0.0.0.0:9100
+      ANYCARDZ_METRICS_TOKEN: ${METRICS_TOKEN:-}
+    ports:
+      - "${METRICS_PUBLISH:-127.0.0.1:9100}:9100"
     volumes:
       - ${DATA_DIR:?set DATA_DIR in .env.prod}:/data:ro
       - cache:/cache

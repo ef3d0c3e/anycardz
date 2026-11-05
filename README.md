@@ -52,6 +52,28 @@ To update, `git pull` both repositories and `make prod-up` again. Card data is r
 
 Cookies are `Secure` and the API believes `X-Forwarded-For` only from Caddy's fixed address (`172.30.0.10`, used for the per-address login limits). To try the stack locally over plain HTTP, set `DOMAIN=http://localhost`, `ORIGIN=http://localhost:8088`, `HTTP_PORT=8088` and `SECURE_COOKIES=0`.
 
+## Monitoring
+
+Prometheus and Grafana run elsewhere; the API only exposes metrics. They are served on their own listener, `ANYCARDZ_METRICS_BIND` (`GET /metrics`, OpenMetrics text), never through the public site. When `ANYCARDZ_METRICS_TOKEN` is set, scrapes must send `Authorization: Bearer <token>`. In `compose.prod.yaml` the listener is published on `METRICS_PUBLISH` (default `127.0.0.1:9100`, the host only); if you publish it on all interfaces, set `METRICS_TOKEN`.
+
+- `deploy/prometheus/scrape.yml`: scrape job to add to your Prometheus
+- `deploy/grafana/anycardz.json`: dashboard (Dashboards → Import), with traffic, latency, auth, live sockets, economy and DB pool panels
+
+| Metric | Labels | What it counts |
+| ------ | ------ | -------------- |
+| `anycardz_http_requests_total` | `method`, `route`, `status` | Requests, by route pattern (unknown paths: `unmatched`) |
+| `anycardz_http_request_duration_seconds` | `method`, `route` | Latency histogram (the live socket is left out) |
+| `anycardz_auth_attempts_total` | `action` (login, register), `result` (ok, failed, limited) | Logins and sign-ups |
+| `anycardz_boosters_bought_total`, `anycardz_boosters_opened_total` | `collection` | Boosters |
+| `anycardz_cards_obtained_total` | `source` (pack, tradeup, roulette), `rarity`, `foil` | Cards gained |
+| `anycardz_coins_earned_total`, `anycardz_coins_spent_total` | `reason` | Coin flows (signup, streak, sell, topup / booster) |
+| `anycardz_roulette_spins_total` | `result` (won, lost) | Foil roulette |
+| `anycardz_trades_total` | `result` (done, cancelled) | Trades ended |
+| `anycardz_shouts_total` | | Shoutbox messages |
+| `anycardz_live_sockets`, `anycardz_online_users` | | Open live sockets, and players behind them |
+| `anycardz_users` | | Registered accounts |
+| `anycardz_db_pool_connections`, `_available`, `_waiting` | | Database pool |
+
 ## API
 
 Everything is under `/api`. Errors are `{"error": "<code>"}` with a stable code that the frontend translates.
