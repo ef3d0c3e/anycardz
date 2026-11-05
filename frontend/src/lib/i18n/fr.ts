@@ -425,6 +425,59 @@ const fr: Partial<Record<Key, string>> = {
 	'soon.title': 'Bientôt',
 	'soon.forge': 'Les fusions et la roulette brillante arrivent à la prochaine étape.',
 	'soon.trade': 'Les échanges entre joueurs arrivent à la prochaine étape.',
-	'soon.back': 'Retour à l’accueil'
+	'soon.back': 'Retour à l’accueil',
+
+	'menu.settings': 'Réglages',
+	'legal.terms': 'Conditions d’utilisation',
+	'legal.privacy': 'Confidentialité',
+	'legal.updated': 'Dernière mise à jour : {date}',
+	'legal.accept_label': 'J’accepte les {terms} et la {privacy}',
+	'legal.terms_link': 'conditions d’utilisation',
+	'legal.privacy_link': 'politique de confidentialité',
+	'legal.changed.title': 'Les conditions ont changé',
+	'legal.changed.lead':
+		'Lisez les nouvelles {terms} et la {privacy}, puis acceptez-les pour continuer à jouer.',
+	'legal.changed.accept': 'J’accepte',
+	'legal.changed.alternative':
+		'Pas d’accord ? Vous pouvez quand même télécharger vos données et supprimer votre compte :',
+	'settings.title': 'Réglages',
+	'settings.email.title': 'Adresse e-mail',
+	'settings.email.current': 'Adresse actuelle : {email}',
+	'settings.email.new': 'Nouvelle adresse',
+	'settings.email.submit': 'Changer d’e-mail',
+	'settings.email.done': 'Adresse e-mail modifiée.',
+	'settings.password.title': 'Mot de passe',
+	'settings.password.current': 'Mot de passe actuel',
+	'settings.password.new': 'Nouveau mot de passe',
+	'settings.password.submit': 'Changer le mot de passe',
+	'settings.password.done': 'Mot de passe modifié. Vos autres appareils sont déconnectés.',
+	'settings.password.confirm': 'Votre mot de passe, pour confirmer',
+	'settings.sessions.title': 'Appareils',
+	'settings.sessions.lead': 'Là où votre compte est connecté.',
+	'settings.sessions.this': 'Cet appareil',
+	'settings.sessions.seen': 'Actif {ago}',
+	'settings.sessions.since': 'Connecté le {date}',
+	'settings.sessions.unknown': 'Navigateur inconnu',
+	'settings.sessions.revoke': 'Déconnecter',
+	'settings.sessions.revoke_others': 'Déconnecter tous les autres appareils',
+	'settings.sessions.revoked_one': '1 appareil déconnecté.',
+	'settings.sessions.revoked_other': '{n} appareils déconnectés.',
+	'settings.data.title': 'Vos données',
+	'settings.data.lead':
+		'Tout ce qu’AnyCardz conserve sur vous, en un fichier JSON : compte, cartes, échanges, messages, amis, sessions.',
+	'settings.data.export': 'Télécharger mes données',
+	'settings.legal.title': 'Conditions et confidentialité',
+	'settings.delete.title': 'Supprimer le compte',
+	'settings.delete.lead':
+		'Votre compte, vos cartes, échanges, messages et amis sont supprimés immédiatement. Impossible de revenir en arrière.',
+	'settings.delete.confirm': 'Tapez votre pseudo, {name}, pour confirmer',
+	'settings.delete.submit': 'Supprimer mon compte définitivement',
+	'errors.wrong_password': 'Ce n’est pas votre mot de passe actuel.',
+	'errors.terms_required':
+		'Acceptez les conditions d’utilisation et la politique de confidentialité pour créer un compte.',
+	'errors.terms_changed':
+		'Les conditions ont encore changé. Rechargez la page pour lire la nouvelle version.',
+	'errors.confirm_username': 'Tapez votre pseudo exactement pour confirmer.',
+	'errors.unknown_session': 'Cet appareil est déjà déconnecté.'
 };
 export default fr;

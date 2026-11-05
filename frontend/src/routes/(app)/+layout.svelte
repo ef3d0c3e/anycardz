@@ -15,6 +15,7 @@
 	import Avatar from '#lib/components/Avatar.svelte';
 	import NotificationBell from '#lib/components/NotificationBell.svelte';
 	import SearchPalette from '#lib/components/SearchPalette.svelte';
+	import TermsGate from '#lib/components/TermsGate.svelte';
 	import { getToasts } from '#lib/session.svelte.ts';
 	import { setLive } from '#lib/live.svelte.ts';
 	import { onMount } from 'svelte';
@@ -157,6 +158,7 @@
 									>{i18n.t('menu.requests', { n: session.friendRequests })}</span
 								>{/if}</a
 						>
+						<a href="/settings">{i18n.t('menu.settings')}</a>
 					</nav>
 					<p class="eyebrow">{i18n.t('menu.theme')}</p>
 					<div class="seg" role="group" aria-label={i18n.t('menu.theme')}>
@@ -242,6 +244,10 @@
 
 <TopupSheet />
 <SearchPalette bind:open={searching} />
+<!-- Settings stay reachable: export and deletion are the way out of new terms -->
+{#if session.termsOutdated && page.url.pathname !== '/settings'}
+	<TermsGate onLogout={logout} />
+{/if}
 
 <style>
 	.shell {

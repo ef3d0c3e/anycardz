@@ -48,6 +48,8 @@ export interface MeDto {
 	coins: number;
 	pile: string[];
 	streak: StreakDto;
+	/** The current terms are not accepted yet: asked before playing on */
+	terms_outdated: boolean;
 }
 
 export interface OwnedDto {

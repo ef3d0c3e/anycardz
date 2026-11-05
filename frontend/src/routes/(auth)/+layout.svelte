@@ -2,6 +2,8 @@
 	import type { LayoutProps } from './$types';
 	import Card from '#lib/components/Card.svelte';
 	import { setCatalog } from '#lib/session.svelte.ts';
+	import { getI18n } from '#lib/i18n/index.svelte.ts';
+	const i18n = getI18n();
 	let { data, children }: LayoutProps = $props();
 	// svelte-ignore state_referenced_locally
 	setCatalog(data.collections);
@@ -17,6 +19,10 @@
 	<div class="panel">
 		<a class="logo" href="/login">AnyCard<i>z</i></a>
 		{@render children()}
+		<p class="legal">
+			<a href="/terms">{i18n.t('legal.terms')}</a> ·
+			<a href="/privacy">{i18n.t('legal.privacy')}</a>
+		</p>
 	</div>
 </div>
 
@@ -108,6 +114,15 @@
 	}
 	.panel :global(h1) {
 		font-size: 28px;
+	}
+	.legal {
+		font-size: 12.5px;
+		color: var(--muted);
+		border-top: 1px solid var(--line);
+		padding-top: 14px;
+	}
+	.legal a {
+		color: var(--muted);
 	}
 	.panel :global(.lead) {
 		color: var(--muted);

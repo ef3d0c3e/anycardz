@@ -43,6 +43,14 @@ export class I18n {
 
 	num = (n: number) => n.toLocaleString(this.lang === 'fr' ? 'fr-FR' : 'en-US');
 
+	/** A calendar date ("2026-11-05" or a full timestamp), in UTC so the server
+	 * and the browser print the same day */
+	date = (iso: string) =>
+		new Date(iso).toLocaleDateString(this.lang === 'fr' ? 'fr-FR' : 'en-US', {
+			dateStyle: 'long',
+			timeZone: 'UTC'
+		});
+
 	/** Message for an API error code */
 	error = (e: unknown) => {
 		const code = (e as { code?: string })?.code ?? 'internal';

@@ -4,6 +4,8 @@ import type { CollectionDto, MeDto, StreakDto } from './types';
 /** The logged-in player, kept in sync with API responses */
 export class Session {
 	username = $state('');
+	email = $state('');
+	termsOutdated = $state(false);
 	avatar = $state<string | null>(null);
 	friendRequests = $state(0);
 	notifications = $state(0);
@@ -16,6 +18,8 @@ export class Session {
 	}
 	update(me: MeDto) {
 		this.username = me.username;
+		this.email = me.email;
+		this.termsOutdated = me.terms_outdated;
 		this.avatar = me.avatar;
 		this.friendRequests = me.friend_requests;
 		this.notifications = me.notifications;
